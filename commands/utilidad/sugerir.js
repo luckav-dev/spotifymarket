@@ -11,7 +11,7 @@ module.exports = {
 
     async execute(interaction, { client, emojis, ui }) {
         const sistema = client.sistemas?.suggest;
-        if (!sistema) return ui.responderEfimero(interaction, ui.error(emojis, 'El sistema de sugerencias no está disponible.'));
+        if (!sistema) return ui.responderEfimero(interaction, ui.error(emojis, 'The suggestion system is currently unavailable.'));
         return sistema.abrirModal(interaction);
     }
 };

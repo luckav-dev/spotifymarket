@@ -76,8 +76,9 @@ class StatusSystem {
         const cfg = this.config;
         const estado = this.actual();
         const actualizado = this.db.data.cambiadoEn ?? Date.now();
-        const estadoAscii = this.textoAscii(estado.nombre, 32);
+        const estadoAscii = this.textoAscii(estado.nombre, 42);
         const capacidad = this.barraAscii(estado.porcentaje ?? 100);
+        const filaAscii = contenido => `| ${String(contenido).slice(0, 52).padEnd(52, ' ')} |`;
         const c = new ContainerBuilder()
             .addTextDisplayComponents(ui.cabecera(this.emojis, {
                 emoji: estado.emoji,
@@ -88,8 +89,8 @@ class StatusSystem {
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 '```text\n' +
                 '+------------------------------------------------------+\n' +
-                `| SERVICE   ${estadoAscii}       |\n` +
-                `| CAPACITY  ${capacidad.padEnd(40, ' ')} |\n` +
+                `${filaAscii(`SERVICE   ${estadoAscii}`)}\n` +
+                `${filaAscii(`CAPACITY  ${capacidad}`)}\n` +
                 '+------------------------------------------------------+\n' +
                 '```\n' +
                 `${this.emojis.rol(estado.emoji)} **${estado.nombre}** · ${estado.descripcion}`
@@ -106,7 +107,7 @@ class StatusSystem {
             const ultimo = this.db.data.historial[0];
             const anterior = cfg.estados[ultimo.estado];
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `-# Previous update: ${anterior?.nombre ?? ultimo.estado} · ${ui.fecha(ultimo.fecha)}`
+                `-# Recent change: ${anterior?.nombre ?? ultimo.estado} · ${ui.fecha(ultimo.fecha)}`
             ));
         }
 
@@ -118,7 +119,7 @@ class StatusSystem {
                 fila.addComponents(ui.conEmoji(
                     new ButtonBuilder()
                         .setCustomId(`status:set:${clave}`)
-                        .setLabel(opcion.nombre)
+                        .setLabel(opcion.nombreAdmin ?? opcion.nombre)
                         .setStyle(clave === this.db.data.estado ? ButtonStyle.Primary : ButtonStyle.Secondary)
                         .setDisabled(clave === this.db.data.estado),
                     this.emojis.rol(opcion.emoji)
@@ -127,7 +128,7 @@ class StatusSystem {
             fila.addComponents(ui.conEmoji(
                 new ButtonBuilder()
                     .setCustomId('status:nota')
-                    .setLabel('Team note')
+                    .setLabel('Nota del equipo')
                     .setStyle(ButtonStyle.Secondary),
                 this.emojis.rol('editar')
             ));
@@ -151,12 +152,12 @@ class StatusSystem {
         if (anteriorId) {
             const anterior = await canal.messages.fetch(anteriorId).catch(() => null);
             if (anterior) {
-                await anterior.edit({ ...this.construirPanel(), attachments: [] });
+                await anterior.edit({ ...this.construirPanel({ controles: false }), attachments: [] });
                 return anterior;
             }
         }
 
-        const mensaje = await canal.send(this.construirPanel());
+        const mensaje = await canal.send(this.construirPanel({ controles: false }));
         this.db.data.paneles[canal.id] = mensaje.id;
         this.db.save();
         return mensaje;
@@ -173,7 +174,7 @@ class StatusSystem {
                 this.db.save();
                 continue;
             }
-            await mensaje.edit({ ...this.construirPanel(), attachments: [] }).catch(error =>
+            await mensaje.edit({ ...this.construirPanel({ controles: false }), attachments: [] }).catch(error =>
                 logger.error('estado', `No se pudo refrescar un panel: ${error.message}`));
         }
     }
@@ -194,7 +195,7 @@ class StatusSystem {
         await this.refrescarPaneles();
         await this.client.sistemas.log.enviar('bot',
             `## ${this.emojis.rol('actualizar')} Estado del servicio actualizado\n\n` +
-            `${this.emojis.rol('info')} **Estado:** ${this.actual().nombre}\n` +
+            `${this.emojis.rol('info')} **Estado:** ${this.actual().nombreAdmin ?? this.actual().nombre}\n` +
             `${this.emojis.rol('usuario')} **Por:** <@${usuarioId}>` +
             (nota?.trim() ? `\n${this.emojis.rol('anuncio')} **Nota:** ${ui.plano(ui.truncar(nota, 700))}` : '')
         );
@@ -210,7 +211,7 @@ class StatusSystem {
             return ui.responderEfimero(interaction, ui.aviso(this.emojis, 'El panel de estado está desactivado.'));
         }
         if (!this.puedeGestionar(interaction)) {
-            return ui.responderEfimero(interaction, ui.error(this.emojis, 'No tienes permisos para cambiar el estado del servicio.'));
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'This control is restricted to the administration team.'));
         }
 
         if (accion === 'set') {
@@ -218,7 +219,7 @@ class StatusSystem {
             const estado = await this.cambiar(datos[0], interaction.user.id);
             return interaction.editReply({
                 components: [estado
-                    ? ui.exito(this.emojis, `Estado cambiado a **${estado.nombre}**.`)
+                    ? ui.exito(this.emojis, `Estado cambiado a **${estado.nombreAdmin ?? estado.nombre}**.`)
                     : ui.error(this.emojis, 'Ese estado ya no existe.')],
                 flags: ui.V2
             });

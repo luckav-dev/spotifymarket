@@ -390,7 +390,10 @@ function anadir(container, parte) {
  * Container de confirmacion con botones Confirmar / Cancelar.
  * Sin color: lo peligroso se marca con el emoji y el estilo del boton.
  */
-function confirmar(emojis, { titulo, descripcion, idConfirmar, idCancelar, peligroso = false, etiquetaConfirmar = 'Confirmar' }) {
+function confirmar(emojis, {
+    titulo, descripcion, idConfirmar, idCancelar, peligroso = false,
+    etiquetaConfirmar = 'Confirmar', etiquetaCancelar = 'Cancelar', pie: textoPie
+}) {
     return panel(emojis, {
         emoji: peligroso ? 'aviso' : 'pregunta',
         titulo,
@@ -405,13 +408,13 @@ function confirmar(emojis, { titulo, descripcion, idConfirmar, idCancelar, pelig
                 }),
                 boton(emojis, {
                     id: idCancelar,
-                    etiqueta: 'Cancelar',
+                    etiqueta: etiquetaCancelar,
                     estilo: 'secundario',
                     emoji: 'cancelar'
                 })
             )
         ],
-        pie: peligroso ? 'Esta accion no se puede deshacer.' : undefined
+        pie: textoPie ?? (peligroso ? 'Esta accion no se puede deshacer.' : undefined)
     });
 }
 

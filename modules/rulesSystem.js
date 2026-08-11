@@ -60,7 +60,7 @@ class RulesSystem {
         }
 
         c.addSeparatorComponents(ui.linea());
-        let resumen = `## ${this.emojis.rol('info')} Categorías disponibles\n\n`;
+        let resumen = `## ${this.emojis.rol('info')} Available categories\n\n`;
         for (const categoria of Object.values(categorias)) {
             resumen += `${this.emojis.get(categoria.emoji)} **${categoria.nombre}**\n> ${categoria.descripcion}\n`;
         }
@@ -128,7 +128,7 @@ class RulesSystem {
         const container = this.construirCategoria(interaction.values[0]);
         if (!container) {
             return interaction.reply({
-                components: [ui.error(this.emojis, 'Esa categoría ya no existe.')],
+            components: [ui.error(this.emojis, 'That rules category is no longer available.')],
                 flags: ui.V2_EFIMERO
             });
         }

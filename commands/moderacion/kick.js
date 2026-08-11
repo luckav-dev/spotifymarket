@@ -35,7 +35,7 @@ module.exports = {
         }
 
         await client.sistemas.mod.notificar(usuario, {
-            titulo: 'Has sido expulsado',
+            titulo: 'You have been removed from the server',
             emoji: 'kick',
             guild: interaction.guild,
             motivo

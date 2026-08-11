@@ -67,10 +67,10 @@ class SuggestionSystem {
         if (cfg.panel.mostrarGuia) {
             c.addSeparatorComponents(ui.linea());
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('reglas')} Antes de enviarla\n` +
-                `> ${this.emojis.rol('buscar')} Comprueba que la idea no esté repetida.\n` +
-                `> ${this.emojis.rol('editar')} Explica qué problema resuelve y cómo debería funcionar.\n` +
-                `> ${this.emojis.rol('miembros')} La comunidad podrá votar y el equipo responderá.`
+                `### ${this.emojis.rol('reglas')} Before submitting\n` +
+                `> ${this.emojis.rol('buscar')} Check that the idea has not already been suggested.\n` +
+                `> ${this.emojis.rol('editar')} Explain the problem it solves and how it should work.\n` +
+                `> ${this.emojis.rol('miembros')} The community can vote and the team can respond.`
             ));
         }
 
@@ -81,8 +81,8 @@ class SuggestionSystem {
 
         c.addSeparatorComponents(ui.linea());
         c.addSectionComponents(ui.seccionBoton(
-            `${this.emojis.rol('anadir')} **¿Tienes una propuesta?**\n` +
-            `-# Se publicará con tu autoría y un identificador de seguimiento.`,
+            `${this.emojis.rol('anadir')} **Have an idea?**\n` +
+            `-# It will be published with your authorship and a tracking ID.`,
             ui.boton(this.emojis, {
                 id: 'suggest:nueva',
                 etiqueta: cfg.panel.etiquetaBoton,
@@ -91,7 +91,7 @@ class SuggestionSystem {
         ));
         c.addSeparatorComponents(ui.aire());
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-            ui.pie(`Una sugerencia cada ${ui.duracion(cfg.cooldownMs)} · Los votos son únicos por usuario`)
+            ui.pie(`One suggestion every ${ui.duracion(cfg.cooldownMs)} · one vote per user`)
         ));
 
         return {
@@ -121,11 +121,11 @@ class SuggestionSystem {
     modalNueva() {
         return new ModalBuilder()
             .setCustomId('suggest:enviar')
-            .setTitle('Nueva sugerencia')
+            .setTitle('New suggestion')
             .addLabelComponents(
                 new LabelBuilder()
-                    .setLabel('Título')
-                    .setDescription('Resume la propuesta en una línea')
+                    .setLabel('Title')
+                    .setDescription('Summarize your proposal in one line')
                     .setTextInputComponent(
                         new TextInputBuilder()
                             .setCustomId('titulo')
@@ -137,8 +137,8 @@ class SuggestionSystem {
             )
             .addLabelComponents(
                 new LabelBuilder()
-                    .setLabel('Detalle')
-                    .setDescription('Explica el problema y la solución que propones')
+                    .setLabel('Details')
+                    .setDescription('Explain the problem and the solution you propose')
                     .setTextInputComponent(
                         new TextInputBuilder()
                             .setCustomId('detalle')
@@ -158,12 +158,12 @@ class SuggestionSystem {
 
     async abrirModal(interaction) {
         if (!this.config.activo) {
-            return ui.responderEfimero(interaction, ui.aviso(this.emojis, 'Las sugerencias están desactivadas ahora mismo.'));
+            return ui.responderEfimero(interaction, ui.aviso(this.emojis, 'Suggestions are currently unavailable.'));
         }
         const restante = this.config.cooldownMs - (Date.now() - this.ultimoEnvio(interaction.user.id));
         if (restante > 0) {
             return ui.responderEfimero(interaction, ui.aviso(this.emojis,
-                `Espera ${ui.duracion(restante)} antes de enviar otra sugerencia.`));
+                `Please wait ${ui.duracion(restante)} before submitting another suggestion.`));
         }
         return interaction.showModal(this.modalNueva());
     }
@@ -177,12 +177,12 @@ class SuggestionSystem {
         const porcentaje = total ? Math.round((positivos / total) * 100) : 0;
 
         const cabecera =
-            `## ${this.emojis.rol(estado.emoji)} Sugerencia #${String(sugerencia.numero).padStart(4, '0')} · ${estado.nombre}\n` +
-            `${this.emojis.rol('usuario')} **Autor:** <@${sugerencia.userId}>\n` +
-            `${this.emojis.rol('reloj')} **Publicada:** ${ui.fecha(sugerencia.fecha)}`;
+            `## ${this.emojis.rol(estado.emoji)} Suggestion #${String(sugerencia.numero).padStart(4, '0')} · ${estado.nombre}\n` +
+            `${this.emojis.rol('usuario')} **Author:** <@${sugerencia.userId}>\n` +
+            `${this.emojis.rol('reloj')} **Published:** ${ui.fecha(sugerencia.fecha)}`;
 
         const c = new ContainerBuilder();
-        if (autor) c.addSectionComponents(ui.seccionMiniatura(cabecera, autor.displayAvatarURL({ size: 128 }), 'Avatar del autor'));
+        if (autor) c.addSectionComponents(ui.seccionMiniatura(cabecera, autor.displayAvatarURL({ size: 128 }), 'Author avatar'));
         else c.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
 
         c.addSeparatorComponents(ui.linea());
@@ -193,17 +193,17 @@ class SuggestionSystem {
         if (this.config.votos.activo && !this.config.votos.ocultarRecuento) {
             c.addSeparatorComponents(ui.aire());
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `${this.emojis.get('like')} **${positivos} a favor** · ${this.emojis.get('dislike')} **${negativos} en contra**\n` +
-                `\`${ui.barra(positivos, total, 14)}\` ${total ? `${porcentaje}% favorable` : 'Sin votos todavía'}`
+                `${this.emojis.get('like')} **${positivos} in favor** · ${this.emojis.get('dislike')} **${negativos} against**\n` +
+                `\`${ui.barra(positivos, total, 14)}\` ${total ? `${porcentaje}% favorable` : 'No votes yet'}`
             ));
         }
 
         if (sugerencia.respuesta) {
             c.addSeparatorComponents(ui.linea());
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('administrador')} Respuesta del equipo\n` +
+                `### ${this.emojis.rol('administrador')} Team response\n` +
                 `${ui.cita(ui.plano(sugerencia.respuesta.texto))}\n` +
-                `-# Respondida por <@${sugerencia.respuesta.staffId}> · ${ui.fecha(sugerencia.respuesta.fecha)}`
+                `-# Answered by <@${sugerencia.respuesta.staffId}> · ${ui.fecha(sugerencia.respuesta.fecha)}`
             ));
         }
 
@@ -214,7 +214,7 @@ class SuggestionSystem {
                 ui.conEmoji(
                     new ButtonBuilder()
                         .setCustomId(`suggest:voto:${sugerencia.id}:up`)
-                        .setLabel(this.config.votos.ocultarRecuento ? 'A favor' : String(positivos))
+                        .setLabel(this.config.votos.ocultarRecuento ? 'Upvote' : String(positivos))
                         .setStyle(ButtonStyle.Success)
                         .setDisabled(cerrada),
                     this.emojis.get('like')
@@ -222,7 +222,7 @@ class SuggestionSystem {
                 ui.conEmoji(
                     new ButtonBuilder()
                         .setCustomId(`suggest:voto:${sugerencia.id}:down`)
-                        .setLabel(this.config.votos.ocultarRecuento ? 'En contra' : String(negativos))
+                        .setLabel(this.config.votos.ocultarRecuento ? 'Downvote' : String(negativos))
                         .setStyle(ButtonStyle.Danger)
                         .setDisabled(cerrada),
                     this.emojis.get('dislike')
@@ -231,7 +231,7 @@ class SuggestionSystem {
         }
         fila.addComponents(ui.boton(this.emojis, {
             id: `suggest:resolver:${sugerencia.id}`,
-            etiqueta: 'Responder',
+            etiqueta: 'Staff response',
             emoji: 'administrador'
         }));
         c.addSeparatorComponents(ui.linea());
@@ -258,7 +258,7 @@ class SuggestionSystem {
             : interaction.channel;
         if (!canal?.isTextBased?.()) {
             return interaction.editReply({
-                components: [ui.error(this.emojis, 'El canal de sugerencias no está configurado o ya no existe.')],
+                components: [ui.error(this.emojis, 'The suggestions channel is not configured or no longer exists.')],
                 flags: ui.V2
             });
         }
@@ -285,7 +285,7 @@ class SuggestionSystem {
 
         if (this.config.crearHilo && canal.type === ChannelType.GuildText) {
             await mensaje.startThread({
-                name: `Sugerencia #${String(numero).padStart(4, '0')} · ${sugerencia.titulo}`.slice(0, 100),
+                name: `Suggestion #${String(numero).padStart(4, '0')} · ${sugerencia.titulo}`.slice(0, 100),
                 autoArchiveDuration: 1440
             }).catch(() => {});
         }
@@ -298,7 +298,7 @@ class SuggestionSystem {
         );
 
         return interaction.editReply({
-            components: [ui.exito(this.emojis, `Sugerencia publicada en <#${canal.id}>.\n-# [Ir al mensaje](${mensaje.url})`)],
+            components: [ui.exito(this.emojis, `Suggestion published in <#${canal.id}>.\n-# [Open message](${mensaje.url})`)],
             flags: ui.V2
         });
     }
@@ -309,13 +309,13 @@ class SuggestionSystem {
             const sugerencia = this.db.data.sugerencias[id];
             if (!sugerencia) {
                 return interaction.followUp({
-                    components: [ui.error(this.emojis, 'Esa sugerencia ya no existe.')],
+                    components: [ui.error(this.emojis, 'That suggestion no longer exists.')],
                     flags: ui.V2_EFIMERO
                 });
             }
             if (!['abierta', 'revision'].includes(sugerencia.estado)) {
                 return interaction.followUp({
-                    components: [ui.aviso(this.emojis, 'La votación de esta sugerencia ya está cerrada.')],
+                    components: [ui.aviso(this.emojis, 'Voting on this suggestion is closed.')],
                     flags: ui.V2_EFIMERO
                 });
             }
@@ -326,7 +326,7 @@ class SuggestionSystem {
             const yaHabiaVotado = destino.includes(userId) || contrario.includes(userId);
             if (yaHabiaVotado && !this.config.votos.permitirCambiar) {
                 return interaction.followUp({
-                    components: [ui.aviso(this.emojis, 'Tu voto ya está registrado y esta votación no permite cambiarlo.')],
+                    components: [ui.aviso(this.emojis, 'Your vote is already recorded and cannot be changed.')],
                     flags: ui.V2_EFIMERO
                 });
             }
@@ -345,7 +345,7 @@ class SuggestionSystem {
 
     async abrirResolucion(interaction, id) {
         if (!permisos.puede(interaction.member, 'gestionarSugerencias')) {
-            return ui.responderEfimero(interaction, ui.error(this.emojis, 'Solo el equipo puede responder sugerencias.'));
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'This control is restricted to the staff team.'));
         }
         const sugerencia = this.db.data.sugerencias[id];
         if (!sugerencia) return ui.responderEfimero(interaction, ui.error(this.emojis, 'Esa sugerencia ya no existe.'));
@@ -361,7 +361,7 @@ class SuggestionSystem {
                             new StringSelectMenuBuilder()
                                 .setCustomId('estado')
                                 .addOptions(Object.entries(this.config.estados).map(([value, item]) => ({
-                                    label: item.nombre,
+                                    label: item.nombreAdmin ?? item.nombre,
                                     value,
                                     default: value === sugerencia.estado
                                 })))
@@ -384,7 +384,7 @@ class SuggestionSystem {
 
     async resolver(interaction, id) {
         if (!permisos.puede(interaction.member, 'gestionarSugerencias')) {
-            return ui.responderEfimero(interaction, ui.error(this.emojis, 'Solo el equipo puede responder sugerencias.'));
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'This control is restricted to the staff team.'));
         }
         const sugerencia = this.db.data.sugerencias[id];
         if (!sugerencia) return ui.responderEfimero(interaction, ui.error(this.emojis, 'Esa sugerencia ya no existe.'));
@@ -412,8 +412,8 @@ class SuggestionSystem {
                 await autor.send({
                     components: [ui.panel(this.emojis, {
                         emoji: item.emoji,
-                        titulo: `Tu sugerencia #${String(sugerencia.numero).padStart(4, '0')}`,
-                        subtitulo: `Estado: **${item.nombre}**`,
+                        titulo: `Your suggestion #${String(sugerencia.numero).padStart(4, '0')}`,
+                        subtitulo: `Status: **${item.nombre}**`,
                         cuerpo: [ui.cita(ui.plano(sugerencia.respuesta.texto))]
                     })],
                     flags: ui.V2,
@@ -424,14 +424,14 @@ class SuggestionSystem {
 
         return interaction.editReply({
             components: [ui.exito(this.emojis,
-                `Sugerencia #${String(sugerencia.numero).padStart(4, '0')} marcada como **${this.estado(estado).nombre}**.`)],
+                `Sugerencia #${String(sugerencia.numero).padStart(4, '0')} marcada como **${this.estado(estado).nombreAdmin ?? this.estado(estado).nombre}**.`)],
             flags: ui.V2
         });
     }
 
     async handle(interaction, accion, datos) {
         if (!this.config.activo) {
-            return ui.responderEfimero(interaction, ui.aviso(this.emojis, 'Las sugerencias están desactivadas.'));
+            return ui.responderEfimero(interaction, ui.aviso(this.emojis, 'Suggestions are currently unavailable.'));
         }
         if (accion === 'nueva') return this.abrirModal(interaction);
         if (accion === 'enviar') return this.enviar(interaction);

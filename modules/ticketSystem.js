@@ -484,7 +484,7 @@ class TicketSystem {
             this.db.flush();
             await canal.delete('Creacion de ticket incompleta').catch(() => {});
             return interaction.editReply({
-                components: [ui.error(this.emojis, 'El canal se creo, pero Discord rechazo el panel inicial. Se ha revertido la operacion.')],
+                components: [ui.error(this.emojis, 'The channel was created, but Discord rejected the initial panel. The operation was rolled back.')],
                 flags: ui.V2
             });
         }
@@ -606,8 +606,9 @@ class TicketSystem {
         const invitados = t.invitados?.length
             ? ` · ${t.invitados.length} invited participant(s)`
             : '';
+        const apertura = ` · Opened ${ui.fecha(t.abiertoEn, 'R')}`;
         const actividad = t.ultimaActividad ? ` · Last activity ${ui.fecha(t.ultimaActividad, 'R')}` : '';
-        return `${atencion}${invitados}${actividad}`;
+        return `${atencion}${invitados}${apertura}${actividad}`;
     }
 
     botones(t) {
@@ -665,7 +666,7 @@ class TicketSystem {
             `-# Controles privados · solo el equipo de soporte puede usar este panel.\n\n` +
             `${this.emojis.get('ticket')} **Caso:** #${this.numeroFmt(t.id)} · ${cat?.nombre ?? t.categoria}\n` +
             `${this.emojis.get('user')} **Cliente:** <@${t.userId}> · \`${t.userId}\`\n` +
-            `${this.emojis.get(prioridad?.emoji ?? 'signal_medium')} **Prioridad:** ${prioridad?.nombre ?? t.prioridad}\n` +
+            `${this.emojis.get(prioridad?.emoji ?? 'signal_medium')} **Prioridad:** ${prioridad?.nombreAdmin ?? prioridad?.nombre ?? t.prioridad}\n` +
             `${this.emojis.get('guardian')} **Responsable:** ${t.reclamadoPor ? `<@${t.reclamadoPor}>` : 'Sin reclamar'}\n` +
             `${this.emojis.get('people')} **Participantes:** ${t.invitados?.length ?? 0} · **Notas:** ${notas} · **Avisos:** ${notificaciones}`
         ));
@@ -727,7 +728,7 @@ class TicketSystem {
         const t = this.db.data.activos[canalId];
         if (!t) return this.avisarTicketAusente(interaction);
         if (!permisos.puede(interaction.member, 'menuAdmin')) {
-            return interaction.reply({ components: [ui.error(this.emojis, 'Este menú es exclusivo del equipo de soporte.')], flags: ui.V2_EFIMERO });
+            return interaction.reply({ components: [ui.error(this.emojis, 'This menu is restricted to the support team.')], flags: ui.V2_EFIMERO });
         }
         return interaction.reply({
             components: [this.construirMenuAdmin(t)],
@@ -1053,7 +1054,7 @@ class TicketSystem {
             .setPlaceholder('Selecciona la nueva prioridad')
             .addOptions(Object.entries(this.config.prioridades).map(([valor, prioridad]) => {
                 const opcion = new StringSelectMenuOptionBuilder()
-                    .setLabel(prioridad.nombre)
+                    .setLabel(prioridad.nombreAdmin ?? prioridad.nombre)
                     .setValue(valor)
                     .setDefault(Number(valor) === Number(t.prioridad));
                 const emoji = this.emojis.get(prioridad.emoji);
@@ -1095,10 +1096,10 @@ class TicketSystem {
         t.prioridad = Number(valor);
         this.db.save();
         await this.refrescarMensaje(t);
-        this.registrarAccion(t, 'Prioridad actualizada', interaction.user, prioridad.nombre);
+        this.registrarAccion(t, 'Prioridad actualizada', interaction.user, prioridad.nombreAdmin ?? prioridad.nombre);
 
         await interaction.update({
-            components: [this.construirMenuAdmin(t, `${this.emojis.rol('exito')} Priority changed to **${prioridad.nombre}**.`)],
+            components: [this.construirMenuAdmin(t, `${this.emojis.rol('exito')} Prioridad cambiada a **${prioridad.nombreAdmin ?? prioridad.nombre}**.`)],
             flags: ui.V2
         });
     }
@@ -1136,10 +1137,11 @@ class TicketSystem {
         this.db.save();
         this.registrarAccion(t, 'Ticket reclamado', interaction.user);
 
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await this.refrescarMensaje(t);
-        await interaction.reply({
+        await interaction.editReply({
             components: [ui.exito(this.emojis, `Has reclamado el ticket #${this.numeroFmt(t.id)}. El panel público ya está actualizado.`)],
-            flags: ui.V2_EFIMERO,
+            flags: ui.V2,
             allowedMentions: { parse: [] }
         });
     }
@@ -1161,10 +1163,11 @@ class TicketSystem {
         this.db.save();
         this.registrarAccion(t, 'Ticket liberado', interaction.user);
 
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await this.refrescarMensaje(t);
-        await interaction.reply({
+        await interaction.editReply({
             components: [ui.exito(this.emojis, `Has liberado el ticket #${this.numeroFmt(t.id)}.`)],
-            flags: ui.V2_EFIMERO
+            flags: ui.V2
         });
     }
 
@@ -1211,7 +1214,10 @@ class TicketSystem {
                 descripcion: 'A transcript will be generated before the channel is archived.',
                 idConfirmar: `ticket:cerrarok:${canalId}`,
                 idCancelar: `ticket:cancelar:${canalId}`,
-                peligroso: true
+                peligroso: true,
+                etiquetaConfirmar: 'Close ticket',
+                etiquetaCancelar: 'Cancel',
+                pie: 'A complete transcript is preserved before the channel is archived.'
             })],
             flags: ui.V2_EFIMERO
         });
@@ -1701,7 +1707,7 @@ class TicketSystem {
 
     avisarTicketAusente(interaction) {
         return interaction.reply({
-            components: [ui.error(this.emojis, 'Este ticket ya no existe en la base de datos.')],
+            components: [ui.error(this.emojis, 'This ticket no longer exists.')],
             flags: ui.V2_EFIMERO
         });
     }

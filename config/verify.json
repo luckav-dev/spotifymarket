@@ -3,22 +3,22 @@
   "canalId": "",
   "rolId": "",
   "panel": {
-    "titulo": "Spotify Market | Verificación",
-    "subtitulo": "Protege tu cuenta y desbloquea el acceso completo al servidor.",
-    "descripcion": "La verificación confirma que eres miembro de la comunidad y aplica automáticamente el rol configurado.",
+    "titulo": "Spotify Market | Verification",
+    "subtitulo": "Protect your account and unlock full server access.",
+    "descripcion": "Verification confirms your membership and automatically grants the configured role.",
     "logo": "logo",
     "banner": "bannerAlternativo",
     "pasos": [
-      "Lee las normas y la información importante del servidor.",
-      "Pulsa el botón Verificarme situado al final del panel.",
-      "Recibirás el rol y el acceso se actualizará al instante."
+      "Read the rules and important server information.",
+      "Press the Verify button at the bottom of this panel.",
+      "Your role and channel access will update instantly."
     ],
     "beneficios": [
-      "Acceso a los canales de la comunidad.",
-      "Permiso para abrir tickets y consultar el catálogo.",
-      "Registro interno para evitar verificaciones duplicadas."
+      "Access to community channels.",
+      "Permission to open tickets and browse the catalog.",
+      "A secure internal record to prevent duplicate verification."
     ],
-    "nota": "Al verificarte confirmas que has leído y aceptas las normas.",
-    "etiquetaBoton": "Verificarme"
+    "nota": "By verifying, you confirm that you have read and accepted the rules.",
+    "etiquetaBoton": "Verify"
   }
 }

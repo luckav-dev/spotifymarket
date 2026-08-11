@@ -165,9 +165,9 @@ class ModerationSystem {
         const c = new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
                 `## ${this.emojis.get(emoji)} ${titulo}\n\n` +
-                `${this.emojis.get('world')} **Servidor:** ${guild.name}\n` +
+                `${this.emojis.get('world')} **Server:** ${guild.name}\n` +
                 (extra ? `${this.emojis.get('clock')} **${extra.etiqueta}:** ${extra.valor}\n` : '') +
-                `${this.emojis.get('motivo')} **Motivo:** ${motivo}`
+                `${this.emojis.get('motivo')} **Reason:** ${motivo}`
             )
         );
 

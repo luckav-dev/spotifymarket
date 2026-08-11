@@ -23,7 +23,7 @@ module.exports = {
                 const hasta = client.cooldowns.get(clave) ?? 0;
                 if (segundos > 0 && hasta > ahora) {
                     return ui.responderEfimero(interaction,
-                        ui.aviso(emojis, `Espera ${ui.duracion(hasta - ahora)} antes de volver a usar este comando.`));
+                        ui.aviso(emojis, `Please wait ${ui.duracion(hasta - ahora)} before using this command again.`));
                 }
                 if (segundos > 0) {
                     client.cooldowns.set(clave, ahora + segundos * 1000);
@@ -67,7 +67,7 @@ module.exports = {
 
             // Un fallo tambien se responde en Container, nunca en texto plano.
             const componentes = [ui.error(emojis,
-                `Ha ocurrido un error procesando la accion.\n-# Referencia \`${referencia}\``)];
+                `An unexpected error occurred while processing this action.\n-# Reference \`${referencia}\``)];
 
             try {
                 if (interaction.deferred || interaction.replied) {

@@ -15,9 +15,9 @@
     "etiquetaBoton": "Create ticket"
   },
   "prioridades": {
-    "1": { "nombre": "Low", "emoji": "signal_low" },
-    "2": { "nombre": "Medium", "emoji": "signal_medium" },
-    "3": { "nombre": "High", "emoji": "signal_high" }
+    "1": { "nombre": "Low", "nombreAdmin": "Baja", "emoji": "signal_low" },
+    "2": { "nombre": "Medium", "nombreAdmin": "Media", "emoji": "signal_medium" },
+    "3": { "nombre": "High", "nombreAdmin": "Alta", "emoji": "signal_high" }
   },
   "categorias": {
     "soporte": {

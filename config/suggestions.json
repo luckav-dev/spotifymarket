@@ -5,10 +5,10 @@
   "crearHilo": true,
   "avisarAlAutor": true,
   "panel": {
-    "titulo": "Spotify Market | Sugerencias",
-    "descripcion": "Comparte una idea concreta, deja que la comunidad vote y sigue la respuesta del equipo.",
+    "titulo": "Spotify Market | Suggestions",
+    "descripcion": "Share a focused idea, let the community vote and follow the team's response.",
     "banner": "bannerAlternativo",
-    "etiquetaBoton": "Enviar sugerencia",
+    "etiquetaBoton": "Submit suggestion",
     "mostrarGuia": true
   },
   "votos": {
@@ -17,10 +17,10 @@
     "ocultarRecuento": false
   },
   "estados": {
-    "abierta": { "nombre": "Abierta", "emoji": "pregunta" },
-    "revision": { "nombre": "En revisión", "emoji": "cargando" },
-    "aceptada": { "nombre": "Aceptada", "emoji": "exito" },
-    "rechazada": { "nombre": "Rechazada", "emoji": "error" },
-    "implementada": { "nombre": "Implementada", "emoji": "celebrar" }
+    "abierta": { "nombre": "Open", "nombreAdmin": "Abierta", "emoji": "pregunta" },
+    "revision": { "nombre": "Under review", "nombreAdmin": "En revisión", "emoji": "cargando" },
+    "aceptada": { "nombre": "Accepted", "nombreAdmin": "Aceptada", "emoji": "exito" },
+    "rechazada": { "nombre": "Rejected", "nombreAdmin": "Rechazada", "emoji": "error" },
+    "implementada": { "nombre": "Implemented", "nombreAdmin": "Implementada", "emoji": "celebrar" }
   }
 }

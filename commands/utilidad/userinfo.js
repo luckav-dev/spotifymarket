@@ -3,14 +3,14 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 
 const KEY_PERMISSIONS = [
-    ['Administrador', PermissionFlagsBits.Administrator],
-    ['Gestionar servidor', PermissionFlagsBits.ManageGuild],
-    ['Gestionar canales', PermissionFlagsBits.ManageChannels],
-    ['Gestionar roles', PermissionFlagsBits.ManageRoles],
-    ['Gestionar mensajes', PermissionFlagsBits.ManageMessages],
-    ['Moderar miembros', PermissionFlagsBits.ModerateMembers],
-    ['Banear miembros', PermissionFlagsBits.BanMembers],
-    ['Expulsar miembros', PermissionFlagsBits.KickMembers]
+    ['Administrator', PermissionFlagsBits.Administrator],
+    ['Manage server', PermissionFlagsBits.ManageGuild],
+    ['Manage channels', PermissionFlagsBits.ManageChannels],
+    ['Manage roles', PermissionFlagsBits.ManageRoles],
+    ['Manage messages', PermissionFlagsBits.ManageMessages],
+    ['Moderate members', PermissionFlagsBits.ModerateMembers],
+    ['Ban members', PermissionFlagsBits.BanMembers],
+    ['Kick members', PermissionFlagsBits.KickMembers]
 ];
 
 module.exports = {
@@ -30,7 +30,7 @@ module.exports = {
 
         if (!member) {
             return interaction.editReply({
-                components: [ui.error(emojis, 'Ese usuario no pertenece actualmente al servidor.')],
+                components: [ui.error(emojis, 'That user is not currently a member of this server.')],
                 flags: ui.V2
             });
         }
@@ -48,41 +48,41 @@ module.exports = {
         const flags = user.flags?.toArray?.() ?? [];
 
         const summary = [
-            { emoji: 'usuario', etiqueta: 'Cuenta', valor: `<@${user.id}> · \`${user.tag}\`` },
-            { emoji: 'perfil', etiqueta: 'Nombre visible', valor: `${member.displayName}${user.globalName ? ` · global: ${user.globalName}` : ''}` },
-            { emoji: 'cuenta', etiqueta: 'Cuenta creada', valor: `${ui.fecha(user.createdTimestamp, 'F')} · ${ui.fecha(user.createdTimestamp, 'R')}` },
-            { emoji: 'entrada', etiqueta: 'Entrada al servidor', valor: member.joinedTimestamp ? `${ui.fecha(member.joinedTimestamp, 'F')} · ${ui.fecha(member.joinedTimestamp, 'R')}` : 'No disponible' },
-            { emoji: 'bot', etiqueta: 'Tipo', valor: user.bot ? 'Aplicación o bot' : 'Persona' },
-            { emoji: 'servidor', etiqueta: 'Identificador', valor: ui.dato(user.id) }
+            { emoji: 'usuario', etiqueta: 'Account', valor: `<@${user.id}> · \`${user.tag}\`` },
+            { emoji: 'perfil', etiqueta: 'Display name', valor: `${member.displayName}${user.globalName ? ` · global: ${user.globalName}` : ''}` },
+            { emoji: 'cuenta', etiqueta: 'Account created', valor: `${ui.fecha(user.createdTimestamp, 'F')} · ${ui.fecha(user.createdTimestamp, 'R')}` },
+            { emoji: 'entrada', etiqueta: 'Joined server', valor: member.joinedTimestamp ? `${ui.fecha(member.joinedTimestamp, 'F')} · ${ui.fecha(member.joinedTimestamp, 'R')}` : 'Unavailable' },
+            { emoji: 'bot', etiqueta: 'Type', valor: user.bot ? 'Application or bot' : 'Person' },
+            { emoji: 'servidor', etiqueta: 'User ID', valor: ui.dato(user.id) }
         ];
 
         const body = [
-            ui.seccionMiniatura(ui.contenidoCampos(emojis, summary), avatar, `Avatar de ${user.username}`),
+            ui.seccionMiniatura(ui.contenidoCampos(emojis, summary), avatar, `${user.username} avatar`),
             ui.linea(),
             ui.texto(
-                `### ${emojis.rol('rango')} Membresía y roles\n` +
-                `- **Rol principal:** ${member.roles.highest.id === interaction.guild.id ? 'Sin roles' : `<@&${member.roles.highest.id}>`}\n` +
-                `- **Roles asignados:** ${roles.size}${shownRoles ? `\n${shownRoles}` : ''}${roles.size > 12 ? `\n-# Y ${roles.size - 12} roles adicionales.` : ''}\n` +
-                `- **Booster desde:** ${member.premiumSinceTimestamp ? ui.fecha(member.premiumSinceTimestamp, 'F') : 'No es booster'}`
+                `### ${emojis.rol('rango')} Membership and roles\n` +
+                `- **Highest role:** ${member.roles.highest.id === interaction.guild.id ? 'No roles' : `<@&${member.roles.highest.id}>`}\n` +
+                `- **Assigned roles:** ${roles.size}${shownRoles ? `\n${shownRoles}` : ''}${roles.size > 12 ? `\n-# Plus ${roles.size - 12} additional roles.` : ''}\n` +
+                `- **Boosting since:** ${member.premiumSinceTimestamp ? ui.fecha(member.premiumSinceTimestamp, 'F') : 'Not boosting'}`
             ),
             ui.linea(),
             ui.texto(
-                `### ${emojis.rol('moderacion')} Estado y permisos\n` +
-                `- **Timeout:** ${timeout && timeout > Date.now() ? `activo hasta ${ui.fecha(timeout, 'F')}` : 'No activo'}\n` +
-                `- **Verificación pendiente:** ${member.pending ? 'Sí' : 'No'}\n` +
-                `- **Permisos destacados:** ${keyPermissions.length ? keyPermissions.join(' · ') : 'Ninguno'}\n` +
-                `- **Insignias de cuenta:** ${flags.length ? flags.map(flag => `\`${flag}\``).join(' · ') : 'Ninguna disponible'}`
+                `### ${emojis.rol('moderacion')} Status and permissions\n` +
+                `- **Timeout:** ${timeout && timeout > Date.now() ? `active until ${ui.fecha(timeout, 'F')}` : 'Not active'}\n` +
+                `- **Pending verification:** ${member.pending ? 'Yes' : 'No'}\n` +
+                `- **Key permissions:** ${keyPermissions.length ? keyPermissions.join(' · ') : 'None'}\n` +
+                `- **Account badges:** ${flags.length ? flags.map(flag => `\`${flag}\``).join(' · ') : 'None available'}`
             ),
-            banner ? ui.galeria([banner], `Banner de ${user.username}`) : null
+            banner ? ui.galeria([banner], `${user.username} banner`) : null
         ];
 
         return interaction.editReply({
             components: [ui.panel(emojis, {
                 emoji: 'perfil',
                 titulo: member.displayName,
-                subtitulo: `Perfil completo de ${user.tag}`,
+                subtitulo: `Complete profile for ${user.tag}`,
                 cuerpo: body,
-                pie: `Consultado por ${interaction.user.tag} · ${ui.fecha(Date.now(), 'R')}`
+                pie: `Requested by ${interaction.user.tag} · ${ui.fecha(Date.now(), 'R')}`
             })],
             flags: ui.V2,
             allowedMentions: { parse: [] }

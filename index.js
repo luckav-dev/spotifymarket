@@ -111,7 +111,7 @@ async function desplegarComandos() {
 client.desplegarComandos = desplegarComandos;
 
 async function arrancar() {
-    logger.cabecera(paquete.name, paquete.version, `discord.js ${versionDjs} · node ${process.version}`);
+    logger.cabecera('Spotify Market', paquete.version, `discord.js ${versionDjs} · node ${process.version}`);
 
     comprobarEntorno();
 

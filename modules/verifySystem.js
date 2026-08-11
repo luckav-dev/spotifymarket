@@ -71,9 +71,9 @@ class VerifySystem {
         if (panel.pasos?.length) {
             const numeros = ['uno', 'dos', 'tres', 'cuatro', 'cinco'];
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `## ${this.emojis.get('files')} Guía de verificación\n\n` +
+                `## ${this.emojis.get('files')} Verification guide\n\n` +
                 panel.pasos.slice(0, 5).map((paso, i) =>
-                    `${this.emojis.rol(numeros[i])} **Paso ${i + 1}**\n> ${paso}`
+                    `${this.emojis.rol(numeros[i])} **Step ${i + 1}**\n> ${paso}`
                 ).join('\n')
             ));
         }
@@ -81,15 +81,15 @@ class VerifySystem {
         if (panel.beneficios?.length) {
             c.addSeparatorComponents(ui.linea());
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('exito')} Qué desbloqueas\n` +
+                `### ${this.emojis.rol('exito')} What you unlock\n` +
                 panel.beneficios.slice(0, 6).map(item => `- ${item}`).join('\n')
             ));
         }
 
         c.addSeparatorComponents(ui.aire());
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-            `${this.emojis.rol('miembros')} **Miembros verificados:** ${ui.dato(ui.numero(Object.keys(this.db.data.verificados).length))}\n` +
-            `${this.emojis.rol(activo && rolId ? 'exito' : 'aviso')} **Estado:** ${activo && rolId ? 'Disponible' : 'Pendiente de configuracion'}`
+            `${this.emojis.rol('miembros')} **Verified members:** ${ui.dato(ui.numero(Object.keys(this.db.data.verificados).length))}\n` +
+            `${this.emojis.rol(activo && rolId ? 'exito' : 'aviso')} **Status:** ${activo && rolId ? 'Available' : 'Pending configuration'}`
         ));
 
         if (banner) {
@@ -102,7 +102,7 @@ class VerifySystem {
                 new SectionBuilder()
                     .addTextDisplayComponents(
                         new TextDisplayBuilder().setContent(
-                            `${this.emojis.rol('verificado')} **¿Listo para entrar?**\n` +
+                            `${this.emojis.rol('verificado')} **Ready to enter?**\n` +
                             `-# ${panel.nota}`
                         )
                     )
@@ -157,14 +157,14 @@ class VerifySystem {
 
         if (!activo || !rolId) {
             return interaction.reply({
-                components: [ui.error(this.emojis, 'La verificacion no esta configurada todavia.')],
+                components: [ui.error(this.emojis, 'Verification has not been configured yet.')],
                 flags: ui.V2_EFIMERO
             });
         }
 
         if (interaction.member.roles.cache.has(rolId)) {
             return interaction.reply({
-                components: [ui.info(this.emojis, 'Ya estabas verificado.')],
+                components: [ui.info(this.emojis, 'Your account is already verified.')],
                 flags: ui.V2_EFIMERO
             });
         }
@@ -174,7 +174,7 @@ class VerifySystem {
         } catch (error) {
             logger.error('verify', `No se pudo dar el rol: ${error.message}`);
             return interaction.reply({
-                components: [ui.error(this.emojis, 'No he podido darte el rol. Avisa a un administrador.')],
+                components: [ui.error(this.emojis, 'The verification role could not be assigned. Please contact an administrator.')],
                 flags: ui.V2_EFIMERO
             });
         }
@@ -191,7 +191,7 @@ class VerifySystem {
         )).catch(error => logger.warn('verify', `No se pudo registrar la verificacion: ${error.message}`));
 
         await interaction.reply({
-            components: [ui.exito(this.emojis, 'Verificado. Ya tienes acceso al resto del servidor.')],
+            components: [ui.exito(this.emojis, 'Verified. You now have access to the rest of the server.')],
             flags: ui.V2_EFIMERO
         });
     }

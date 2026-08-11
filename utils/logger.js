@@ -68,7 +68,7 @@ const logger = {
         emitir('out', filaCaja(`${nombre}  v${version}`));
         emitir('out', filaCaja(subtitulo));
         emitir('out', c(A.verde, borde('=')));
-        emitir('out', `  ${c(A.bold, 'STARTUP')}  ${c(A.gris, 'Validating services and Discord resources')}`);
+        emitir('out', `  ${c(A.bold, 'INICIO')}  ${c(A.gris, 'Validando servicios y recursos de Discord')}`);
         emitir('out');
     },
 
@@ -84,7 +84,7 @@ const logger = {
         const anchoClave = Math.max(10, ...filas.map(([clave]) => String(clave).length));
         emitir('out');
         emitir('out', c(A.gris, borde('-')));
-        emitir('out', filaCaja('RUNTIME SUMMARY'));
+        emitir('out', filaCaja('RESUMEN OPERATIVO'));
         emitir('out', c(A.gris, borde('-')));
         for (const [clave, valor] of filas) {
             emitir('out', filaCaja(`${String(clave).toUpperCase().padEnd(anchoClave)}  ${valor}`));
@@ -92,10 +92,10 @@ const logger = {
         emitir('out', c(A.gris, borde('-')));
     },
 
-    listo(texto = 'Bot online') {
+    listo(texto = 'Bot operativo') {
         const ms = Date.now() - inicio;
         const tiempo = ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
-        emitir('out', filaCaja(`${texto} · startup ${tiempo}`));
+        emitir('out', filaCaja(`${texto} · arranque ${tiempo}`));
         emitir('out', c(A.verde, borde('=')));
         emitir('out');
         modo = 'ejecucion';

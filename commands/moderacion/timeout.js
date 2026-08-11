@@ -50,11 +50,11 @@ module.exports = {
         const hasta = Date.now() + duracionMs;
 
         await client.sistemas.mod.notificar(usuario, {
-            titulo: 'Has sido silenciado',
+            titulo: 'You have been timed out',
             emoji: 'stagerequesttospeak',
             guild: interaction.guild,
             motivo,
-            extra: { etiqueta: 'Hasta', valor: ui.fecha(hasta, 'F') }
+            extra: { etiqueta: 'Until', valor: ui.fecha(hasta, 'F') }
         });
 
         try {

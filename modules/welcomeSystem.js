@@ -65,14 +65,14 @@ class WelcomeSystem {
             nombre: member.displayName || member.user.globalName || member.user.username,
             usuario: member.user.username,
             avatarUrl,
-            superior: despedida ? 'Hasta pronto' : member.guild.name,
+            superior: despedida ? 'See you soon' : member.guild.name,
             inferior: despedida
-                ? `${ui.numero(member.guild.memberCount)} miembros en el servidor`
-                : `Miembro número ${ui.numero(member.guild.memberCount)}`
+                ? `${ui.numero(member.guild.memberCount)} members in the server`
+                : `Member number ${ui.numero(member.guild.memberCount)}`
         }, {
             ...estilo,
             fondo,
-            etiqueta: despedida ? 'HASTA PRONTO' : (estilo.etiqueta ?? 'BIENVENIDO')
+            etiqueta: despedida ? 'SEE YOU SOON' : (estilo.etiqueta ?? 'WELCOME')
         });
 
         if (!buffer) return null;
@@ -107,16 +107,16 @@ class WelcomeSystem {
         const cuerpo = [
             ui.texto(this.interpolar(cfg.mensaje, member)),
             ui.campos(this.emojis, [
-                { emoji: 'usuario', etiqueta: 'Miembro', valor: `<@${member.id}> · ${ui.dato(member.user.username)}` },
-                { emoji: 'miembros', etiqueta: 'Numero', valor: ui.dato(ui.numero(member.guild.memberCount)) },
+                { emoji: 'usuario', etiqueta: 'Member', valor: `<@${member.id}> · ${ui.dato(member.user.username)}` },
+                { emoji: 'miembros', etiqueta: 'Member count', valor: ui.dato(ui.numero(member.guild.memberCount)) },
                 cfg.mostrarEdadCuenta
-                    ? { emoji: 'cuenta', etiqueta: 'Cuenta creada', valor: ui.fecha(member.user.createdTimestamp) }
+                    ? { emoji: 'cuenta', etiqueta: 'Account created', valor: ui.fecha(member.user.createdTimestamp) }
                     : null
             ]),
             cuentaNueva
-                ? ui.texto(ui.pie(`${this.emojis.rol('aviso')} Cuenta nueva: creada hace menos de ${ui.duracion(cfg.avisarCuentaNuevaMs)}.`))
+                ? ui.texto(ui.pie(`${this.emojis.rol('aviso')} New account: created less than ${ui.duracion(cfg.avisarCuentaNuevaMs)} ago.`))
                 : null,
-            imagen ? ui.galeria([`attachment://${imagen.nombre}`], `Tarjeta de bienvenida de ${member.user.username}`) : null
+            imagen ? ui.galeria([`attachment://${imagen.nombre}`], `Welcome card for ${member.user.username}`) : null
         ];
 
         const fila = this.botones(member);
@@ -125,7 +125,7 @@ class WelcomeSystem {
             titulo: this.interpolar(cfg.titulo, member),
             cuerpo,
             acciones: fila ? [fila] : [],
-            pie: prueba ? 'Vista previa: solo la persona que ejecuto el comando ha sido usada como ejemplo.' : undefined
+            pie: prueba ? 'Preview: the command author is being used as the example member.' : undefined
         });
 
         return {
@@ -146,20 +146,20 @@ class WelcomeSystem {
         const cuerpo = [
             ui.texto(this.interpolar(cfg.mensaje, member)),
             ui.campos(this.emojis, [
-                { emoji: 'usuario', etiqueta: 'Usuario', valor: ui.dato(member.user.tag) },
+                { emoji: 'usuario', etiqueta: 'User', valor: ui.dato(member.user.tag) },
                 cfg.mostrarTiempoEnServidor && member.joinedTimestamp
-                    ? { emoji: 'reloj', etiqueta: 'Se unio', valor: ui.fecha(member.joinedTimestamp) }
+                    ? { emoji: 'reloj', etiqueta: 'Joined', valor: ui.fecha(member.joinedTimestamp) }
                     : null,
-                { emoji: 'miembros', etiqueta: 'Miembros actuales', valor: ui.dato(ui.numero(member.guild.memberCount)) }
+                { emoji: 'miembros', etiqueta: 'Current members', valor: ui.dato(ui.numero(member.guild.memberCount)) }
             ]),
             roles ? ui.texto(ui.pie(`Roles: ${ui.truncar(roles, 700)}`)) : null,
-            imagen ? ui.galeria([`attachment://${imagen.nombre}`], `Tarjeta de despedida de ${member.user.username}`) : null
+            imagen ? ui.galeria([`attachment://${imagen.nombre}`], `Farewell card for ${member.user.username}`) : null
         ];
 
         return {
             components: [ui.panel(this.emojis, {
                 emoji: 'salida',
-                titulo: 'Un miembro se ha marchado',
+                titulo: 'A member has left',
                 cuerpo
             })],
             files: imagen ? [imagen.archivo] : [],
@@ -239,7 +239,7 @@ class WelcomeSystem {
         const enviado = await destino.send({
             components: [ui.panel(this.emojis, {
                 emoji: 'celebrar',
-                titulo: `${ui.numero(member.guild.memberCount)} miembros`,
+                titulo: `${ui.numero(member.guild.memberCount)} members`,
                 cuerpo: [ui.texto(this.interpolar(cfg.mensaje, member))]
             })],
             flags: ui.V2,

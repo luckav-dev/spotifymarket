@@ -1,101 +1,101 @@
 {
   "panel": {
-    "titulo": "Spotify Market | Normas",
-    "subtitulo": "Información clara para comprar, participar y pedir ayuda con seguridad.",
-    "descripcion": "Selecciona una categoría para consultar únicamente las normas que necesitas.",
+    "titulo": "Spotify Market | Rules",
+    "subtitulo": "Clear guidance for purchasing, participating and requesting help safely.",
+    "descripcion": "Select a category to read only the rules you need.",
     "banner": "bannerAlternativo",
-    "placeholder": "Selecciona una categoría de normas",
-    "nota": "La versión válida es siempre la publicada por el equipo de administración."
+    "placeholder": "Select a rules category",
+    "nota": "The version published by the administration team is always the current one."
   },
   "categorias": {
     "generales": {
-      "nombre": "Normas generales",
-      "descripcion": "Convivencia, respeto y uso correcto del servidor.",
+      "nombre": "General rules",
+      "descripcion": "Respectful behavior and proper use of the server.",
       "emoji": "rules",
       "secciones": [
         {
-          "titulo": "Respeto y convivencia",
+          "titulo": "Respect and conduct",
           "contenido": [
-            "Trata con respeto a todos los miembros y al equipo.",
-            "No se permite acoso, discriminación, amenazas ni contenido ofensivo.",
-            "Evita discusiones personales y utiliza los canales para su finalidad."
+            "Treat every member and staff member with respect.",
+            "Harassment, discrimination, threats and offensive content are not allowed.",
+            "Avoid personal disputes and use each channel for its intended purpose."
           ]
         },
         {
-          "titulo": "Contenido y publicidad",
+          "titulo": "Content and advertising",
           "contenido": [
-            "No hagas spam, flood ni publicidad sin autorización.",
-            "No compartas contenido malicioso, engañoso o inapropiado.",
-            "Respeta las decisiones de moderación y utiliza soporte para recurrirlas."
+            "Do not spam, flood or advertise without permission.",
+            "Do not share malicious, deceptive or inappropriate content.",
+            "Respect moderation decisions and use support if you wish to appeal."
           ]
         }
       ]
     },
     "compras": {
-      "nombre": "Compras y pedidos",
-      "descripcion": "Proceso seguro para presupuestos, pagos y entregas.",
+      "nombre": "Purchases and orders",
+      "descripcion": "A safe process for quotes, payments and deliveries.",
       "emoji": "wallet",
       "secciones": [
         {
-          "titulo": "Antes de comprar",
+          "titulo": "Before purchasing",
           "contenido": [
-            "Confirma en el ticket el producto, alcance, precio y plazo.",
-            "Utiliza únicamente los métodos y cuentas indicados por el equipo autorizado.",
-            "No cierres el ticket hasta comprobar que toda la información es correcta."
+            "Confirm the product, scope, price and delivery time in the ticket.",
+            "Use only the payment methods and accounts provided by authorized staff.",
+            "Do not close the ticket until every detail has been checked."
           ]
         },
         {
-          "titulo": "Seguimiento",
+          "titulo": "Order follow-up",
           "contenido": [
-            "Mantén la conversación y los comprobantes dentro del ticket.",
-            "Explica los cambios con claridad; una ampliación puede requerir nueva valoración.",
-            "Si detectas una suplantación, avisa inmediatamente a administración."
+            "Keep the conversation and payment evidence inside the ticket.",
+            "Explain changes clearly; additional work may require a revised quote.",
+            "Report any impersonation attempt to the administration team immediately."
           ]
         }
       ]
     },
     "soporte": {
-      "nombre": "Soporte y tickets",
-      "descripcion": "Cómo obtener ayuda de forma rápida y ordenada.",
+      "nombre": "Support and tickets",
+      "descripcion": "How to get help quickly and efficiently.",
       "emoji": "ticket",
       "secciones": [
         {
-          "titulo": "Abrir una solicitud",
+          "titulo": "Opening a request",
           "contenido": [
-            "Elige la categoría correcta y resume el problema en el asunto.",
-            "Incluye contexto, capturas y mensajes de error cuando sea posible.",
-            "No menciones repetidamente al staff: el sistema avisa automáticamente."
+            "Choose the correct category and summarize the issue in the subject.",
+            "Include context, screenshots and error messages whenever possible.",
+            "Do not repeatedly mention staff; the system notifies the team automatically."
           ]
         },
         {
-          "titulo": "Durante la atención",
+          "titulo": "During support",
           "contenido": [
-            "Responde en el mismo ticket y evita abrir duplicados.",
-            "No publiques datos privados o credenciales completas.",
-            "Confirma si la solución ha funcionado antes de cerrar el caso."
+            "Reply in the same ticket and avoid opening duplicates.",
+            "Never post private data or complete credentials.",
+            "Confirm that the solution worked before closing the case."
           ]
         }
       ]
     },
     "seguridad": {
-      "nombre": "Seguridad",
-      "descripcion": "Protección de cuentas, credenciales y comunicaciones.",
+      "nombre": "Security",
+      "descripcion": "Protecting accounts, credentials and communications.",
       "emoji": "guardian",
       "secciones": [
         {
-          "titulo": "Protege tu cuenta",
+          "titulo": "Protect your account",
           "contenido": [
-            "Activa la autenticación en dos pasos de Discord.",
-            "El equipo nunca necesita tu contraseña, token de bot ni código 2FA.",
-            "Comprueba los roles antes de confiar en mensajes privados."
+            "Enable two-factor authentication on Discord.",
+            "Staff will never need your password, bot token or 2FA code.",
+            "Check server roles before trusting direct messages."
           ]
         },
         {
-          "titulo": "Reportar un riesgo",
+          "titulo": "Reporting a risk",
           "contenido": [
-            "Guarda capturas, IDs y enlaces de mensajes sospechosos.",
-            "Abre un ticket de soporte y evita enfrentarte públicamente al usuario.",
-            "Cambia tus credenciales inmediatamente si crees que han sido expuestas."
+            "Save screenshots, IDs and links to suspicious messages.",
+            "Open a support ticket and avoid confronting the user publicly.",
+            "Change your credentials immediately if you believe they were exposed."
           ]
         }
       ]

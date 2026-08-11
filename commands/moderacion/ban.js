@@ -42,7 +42,7 @@ module.exports = {
 
         // Notificar antes de ejecutar: despues de un ban ya no se le puede escribir.
         await client.sistemas.mod.notificar(usuario, {
-            titulo: 'Has sido baneado',
+            titulo: 'You have been banned',
             emoji: 'ban',
             guild: interaction.guild,
             motivo

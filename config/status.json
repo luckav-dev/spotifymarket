@@ -8,6 +8,7 @@
   "estados": {
     "abierto": {
       "nombre": "Operational",
+      "nombreAdmin": "Operativo",
       "descripcion": "Orders and support tickets are being handled normally.",
       "emoji": "exito",
       "porcentaje": 100,
@@ -15,6 +16,7 @@
     },
     "ocupado": {
       "nombre": "High demand",
+      "nombreAdmin": "Alta demanda",
       "descripcion": "Services are available, but replies may take longer than usual.",
       "emoji": "aviso",
       "porcentaje": 75,
@@ -22,6 +24,7 @@
     },
     "cerrado": {
       "nombre": "Offline",
+      "nombreAdmin": "Fuera de línea",
       "descripcion": "New requests will be reviewed when the team is available again.",
       "emoji": "error",
       "porcentaje": 0,
@@ -29,6 +32,7 @@
     },
     "mantenimiento": {
       "nombre": "Maintenance",
+      "nombreAdmin": "Mantenimiento",
       "descripcion": "Services are being updated; some orders or deliveries may be delayed.",
       "emoji": "cargando",
       "porcentaje": 40,

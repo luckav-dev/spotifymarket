@@ -4,17 +4,17 @@ const { SlashCommandBuilder } = require('discord.js');
 
 const GRUPOS = [
     {
-        titulo: 'Administracion',
+        titulo: 'Administration',
         emoji: 'administrador',
         comandos: ['publish', 'product', 'emojis', 'say', 'setup', 'diagnostics', 'ticket-stats']
     },
     {
-        titulo: 'Moderacion',
+        titulo: 'Moderation',
         emoji: 'moderacion',
         comandos: ['ban', 'unban', 'kick', 'timeout', 'untimeout', 'warn', 'warnings', 'remove-warning', 'clear', 'channel']
     },
     {
-        titulo: 'Informacion',
+        titulo: 'Information',
         emoji: 'info',
         comandos: ['help', 'server-info', 'user-info', 'status', 'suggest']
     }
@@ -40,13 +40,13 @@ module.exports = {
         return interaction.reply({
             components: [ui.panel(emojis, {
                 emoji: 'comando',
-                titulo: 'Centro de ayuda',
-                subtitulo: 'Herramientas disponibles en el servidor.',
+                titulo: 'Help Center',
+                subtitulo: 'Commands and systems available in this server.',
                 cuerpo: [
                     ...secciones,
-                    ui.texto(`### ${emojis.rol('ticket')} Gestión de tickets\nLas acciones de cada caso se realizan desde **Claim**, **Admin menu** y **Close** dentro del propio ticket; no existen comandos de gestión duplicados.`)
+                    ui.texto(`### ${emojis.rol('ticket')} Ticket management\nEvery case is managed through **Claim**, **Admin menu** and **Close** inside its ticket; there are no duplicate management commands.`)
                 ],
-                pie: 'Discord solo muestra y permite ejecutar los comandos para los que tienes permisos.'
+                pie: 'Discord only shows and allows commands for which you have permission.'
             })],
             flags: ui.V2_EFIMERO,
             allowedMentions: { parse: [] }

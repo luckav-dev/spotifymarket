@@ -2,8 +2,8 @@
   "bienvenida": {
     "activo": true,
     "canalId": "1536489826218545234",
-    "titulo": "Bienvenido a {servidor}",
-    "mensaje": "{mencion}, ya formas parte de la comunidad. Revisa la informacion importante y disfruta de tu estancia.",
+    "titulo": "Welcome to {servidor}",
+    "mensaje": "{mencion}, you are now part of the community. Check the important channels and enjoy your stay.",
     "mencionar": true,
     "mostrarEdadCuenta": true,
     "avisarCuentaNueva": true,
@@ -23,20 +23,20 @@
     "texto": "#ffffff",
     "textoSuave": "#d4d4d8",
     "textoPastilla": "#18181b",
-    "etiqueta": "BIENVENIDO"
+    "etiqueta": "WELCOME"
   },
   "despedida": {
     "activo": false,
     "canalId": "",
-    "mensaje": "{usuario} ha dejado {servidor}.",
+    "mensaje": "{usuario} has left {servidor}.",
     "mostrarTarjeta": false,
     "mostrarRoles": true,
     "mostrarTiempoEnServidor": true
   },
   "mensajePrivado": {
     "activo": false,
-    "titulo": "Bienvenido a {servidor}",
-    "texto": "Gracias por unirte. Consulta los canales de informacion antes de empezar."
+    "titulo": "Welcome to {servidor}",
+    "texto": "Thank you for joining. Please check the information channels before getting started."
   },
   "rolesAutomaticos": {
     "activo": false,
@@ -46,6 +46,6 @@
     "activo": false,
     "cada": 100,
     "canalId": "",
-    "mensaje": "Ya somos {miembros} miembros. Gracias por formar parte de la comunidad."
+    "mensaje": "We are now {miembros} members. Thank you for being part of the community."
   }
 }

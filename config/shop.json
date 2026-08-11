@@ -1,21 +1,21 @@
 {
   "moneda": "EUR",
   "simbolo": "€",
-  "categorias": ["Bots", "Setups", "Diseño"],
+  "categorias": ["Bots", "Setups", "Design"],
   "catalogo": {
-    "titulo": "Spotify Market | Catálogo",
-    "subtitulo": "Servicios digitales y desarrollos adaptados a cada proyecto.",
-    "descripcion": "Consulta la disponibilidad, el precio y los detalles antes de abrir una solicitud de compra.",
+    "titulo": "Spotify Market | Catalog",
+    "subtitulo": "Digital services and development tailored to each project.",
+    "descripcion": "Check availability, pricing and details before opening a purchase request.",
     "banner": "bannerCatalogo",
     "ventajas": [
-      "Atención privada mediante ticket.",
-      "Requisitos, precio y plazo confirmados antes de empezar.",
-      "Seguimiento del pedido por el equipo de soporte."
+      "Private assistance through a support ticket.",
+      "Requirements, price and delivery time confirmed before work begins.",
+      "Order follow-up from the support team."
     ],
-    "nota": "El bot no procesa pagos automáticamente: un miembro del equipo confirmará cada pedido.",
-    "etiquetaBoton": "Explorar catálogo",
-    "textoCompra": "Al pulsar Comprar se abre un ticket privado donde concretamos los detalles.",
-    "textoAgotado": "Sin disponibilidad ahora mismo. Escríbenos por soporte si te interesa."
+    "nota": "The bot does not process payments automatically; a team member confirms every order.",
+    "etiquetaBoton": "Browse catalog",
+    "textoCompra": "Selecting Buy opens a private ticket where we confirm every detail.",
+    "textoAgotado": "Currently unavailable. Contact support if you are interested."
   },
   "compra": {
     "categoriaTicket": "compra"

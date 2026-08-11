@@ -104,7 +104,7 @@ Al anadir nuevos `.png` sin reiniciar, resincroniza con `/emojis`.
 | `config/logs.json` | Canal por categoria, filtros y agrupacion |
 | `config/moderacion.json` | Aviso por MD y escalado por acumulacion de avisos |
 | `config/shop.json` | Moneda, categorias, textos del catalogo y categoria de ticket para la compra |
-| `config/status.json` | Estados operativos, banner, nota e historial del servicio |
+| `config/status.json` | Estados operativos, porcentaje, nota e historial del servicio |
 | `config/suggestions.json` | Panel, canal, votos y estados de las sugerencias |
 
 Los IDs y textos existentes se conservan como fuente de verdad. Los destinos
@@ -112,6 +112,9 @@ opcionales pueden quedarse vacíos hasta activarlos con `/setup`; `/diagnostics`
 comprueba IDs, permisos, recursos y límites antes de que un fallo llegue a un
 usuario. Cada guardado crea una copia automática en `config/backups/` y la API
 rechaza configuraciones que Discord no podría publicar.
+
+La interfaz pública está redactada en inglés. Los menús efímeros, registros y
+respuestas que solo ve el equipo de administración se mantienen en español.
 
 `presencia.actividad.nombre` vacio deja al bot sin actividad, sin inventar
 ningun texto. Los tipos validos son `Playing`, `Streaming`, `Listening`,
@@ -177,9 +180,10 @@ interna de tickets. Cuando Discord ofrece evidencia, consulta auditoría y
 conserva ejecutor, motivo, IDs, estado anterior/nuevo y tiempos. Los eventos se
 agrupan en lotes para no comerse el rate limit.
 
-**Estado.** Panel público con banner original de la tienda, disponibilidad,
-nota operativa e historial. El equipo autorizado cambia el estado o la nota
-desde el propio mensaje y todos los paneles publicados se actualizan en sitio.
+**Estado.** Panel público compacto, sin accent color, con resumen ASCII,
+capacidad, nota operativa y una única referencia al cambio reciente. El panel
+publicado no expone controles: el equipo autorizado los recibe en privado al
+usar `/status`, y todos los paneles publicados se actualizan en sitio.
 
 **Sugerencias.** Panel y comando `/suggest` con formulario, votos únicos por
 usuario, cambio de voto, hilo opcional, estados configurables y respuesta
@@ -263,29 +267,28 @@ emojis, comandos duplicados y la ausencia de accent color en Components V2.
 
 ## Consola
 
-Sin cajas, sin reglas ni banners: solo sangria, una columna de simbolo, una de
-ambito y el mensaje.
-
-El arranque no lleva marca de hora — es una secuencia y se lee de un vistazo.
-Todo lo que ocurre despues si la lleva, porque ahi el cuando importa. Los avisos
-que caen durante el arranque tampoco la llevan, para que las columnas no queden
-dentadas.
+El arranque usa una cabecera compacta, niveles alineados y un resumen operativo
+final. Después de iniciar, cada evento incorpora hora, nivel y ámbito; las
+trazas se limitan a las líneas útiles para que un fallo no entierre el contexto.
 
 ```
-  spotifymarketbot  0.1.0
-  discord.js 14.27.0 · node v22.22.2
+  +======================================================================+
+  | Spotify Market  v0.1.0                                             |
+  | discord.js 14.27.0 · node v22.22.2                                 |
+  +======================================================================+
+  INICIO  Validando servicios y recursos de Discord
 
-  ✓ comandos     1 cargados
-  ✓ eventos      2 registrados
-  ✓ sesion       ...
-  ✓ emojis       86 sincronizados
+  OK     comandos      22 cargados
+  OK     eventos       14 registrados
 
-    servidores   1
-    comandos     1
-    emojis       86
-    presencia    sin actividad
-
-  listo en 1.4 s
+  +----------------------------------------------------------------------+
+  | RESUMEN OPERATIVO                                                  |
+  | SERVIDORES  1                                                      |
+  | COMANDOS    22                                                     |
+  | EMOJIS      86                                                     |
+  +----------------------------------------------------------------------+
+  | Bot operativo · arranque 1.4 s                                    |
+  +======================================================================+
 ```
 
 Los colores degradan a texto plano cuando la salida no es un TTY (`docker logs`,

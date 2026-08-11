@@ -78,8 +78,8 @@ class ShopSystem {
     }
 
     stockTexto(producto) {
-        if (producto.stock === STOCK_ILIMITADO) return 'Bajo pedido';
-        return producto.stock > 0 ? String(producto.stock) : 'Agotado';
+        if (producto.stock === STOCK_ILIMITADO) return 'Made to order';
+        return producto.stock > 0 ? String(producto.stock) : 'Sold out';
     }
 
     precioTexto(producto) {
@@ -120,27 +120,27 @@ class ShopSystem {
             let resumen = '';
             for (const [categoria, lista] of porCategoria) {
                 const desde = Math.min(...lista.map(p => p.precio));
-                resumen += `> ${this.emojis.get('folder')} **${categoria}**・${lista.length} producto(s) · desde ${desde.toFixed(2)}${this.config.simbolo}\n`;
+                resumen += `> ${this.emojis.get('folder')} **${categoria}**・${lista.length} product(s) · from ${desde.toFixed(2)}${this.config.simbolo}\n`;
             }
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(resumen.trim()));
         } else {
             c.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('-# Todavia no hay productos publicados.')
+                new TextDisplayBuilder().setContent('-# No products have been published yet.')
             );
         }
 
         if (catalogo.ventajas?.length) {
             c.addSeparatorComponents(ui.linea());
             c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('destacado')} Cómo trabajamos\n` +
+                `### ${this.emojis.rol('destacado')} How we work\n` +
                 catalogo.ventajas.slice(0, 6).map(item => `- ${item}`).join('\n')
             ));
         }
 
         c.addSeparatorComponents(ui.aire());
         c.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-            `${this.emojis.rol('producto')} **Productos publicados:** ${ui.dato(ui.numero(productos.length))}\n` +
-            `${this.emojis.rol('catalogo')} **Categorías activas:** ${ui.dato(ui.numero(porCategoria.size))}`
+            `${this.emojis.rol('producto')} **Published products:** ${ui.dato(ui.numero(productos.length))}\n` +
+            `${this.emojis.rol('catalogo')} **Active categories:** ${ui.dato(ui.numero(porCategoria.size))}`
         ));
 
         if (banner) {
@@ -153,15 +153,15 @@ class ShopSystem {
             new SectionBuilder()
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
-                        `${this.emojis.get('buscar')} **¿Quieres ver todos los productos?**\n` +
-                        `-# El catálogo se abre solo para ti y no modifica el panel público.`
+                        `${this.emojis.get('buscar')} **Want to see every product?**\n` +
+                        `-# The catalog opens privately and does not change the public panel.`
                     )
                 )
                 .setButtonAccessory(
                     ui.conEmoji(
                         new ButtonBuilder()
                             .setCustomId('shop:pagina:0:-1')
-                            .setLabel(catalogo.etiquetaBoton ?? 'Explorar catálogo')
+                            .setLabel(catalogo.etiquetaBoton ?? 'Browse catalog')
                             .setStyle(ButtonStyle.Secondary)
                             .setDisabled(productos.length === 0),
                         this.emojis.get('buscar')
@@ -207,9 +207,9 @@ class ShopSystem {
         c.addSeparatorComponents(ui.linea());
         c.addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-                `${this.emojis.get('dinero')} **Precio:** ${this.precioTexto(p)}\n` +
-                `${this.emojis.get('folder')} **Categoria:** ${p.categoria}\n` +
-                `${this.emojis.get('files')} **Disponibilidad:** ${this.stockTexto(p)}`
+                `${this.emojis.get('dinero')} **Price:** ${this.precioTexto(p)}\n` +
+                `${this.emojis.get('folder')} **Category:** ${p.categoria}\n` +
+                `${this.emojis.get('files')} **Availability:** ${this.stockTexto(p)}`
             )
         );
 
@@ -219,15 +219,15 @@ class ShopSystem {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         agotado
-                            ? `${this.emojis.rol('error')} **No disponible**\n-# ${catalogo.textoAgotado}`
-                            : `${this.emojis.get('wallet')} **Comprar**\n-# ${catalogo.textoCompra}`
+                            ? `${this.emojis.rol('error')} **Unavailable**\n-# ${catalogo.textoAgotado}`
+                            : `${this.emojis.get('wallet')} **Buy now**\n-# ${catalogo.textoCompra}`
                     )
                 )
                 .setButtonAccessory(
                     ui.conEmoji(
                         new ButtonBuilder()
                             .setCustomId(`shop:comprar:${p.id}`)
-                            .setLabel(agotado ? 'No disponible' : 'Comprar')
+                            .setLabel(agotado ? 'Unavailable' : 'Buy')
                             .setStyle(agotado ? ButtonStyle.Secondary : ButtonStyle.Success)
                             .setDisabled(agotado),
                         this.emojis.get(agotado ? 'error' : 'wallet')
@@ -241,7 +241,7 @@ class ShopSystem {
             new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`shop:pagina:${pagina - 1}:${filtro}`)
-                    .setLabel('Anterior')
+                    .setLabel('Previous')
                     .setStyle(ButtonStyle.Secondary)
                     .setDisabled(pagina === 0),
                 new ButtonBuilder()
@@ -251,7 +251,7 @@ class ShopSystem {
                     .setDisabled(true),
                 new ButtonBuilder()
                     .setCustomId(`shop:pagina:${pagina + 1}:${filtro}`)
-                    .setLabel('Siguiente')
+                    .setLabel('Next')
                     .setStyle(ButtonStyle.Secondary)
                     .setDisabled(pagina >= productos.length - 1)
             )
@@ -264,10 +264,10 @@ class ShopSystem {
         if (categoriasActivas.length > 1) {
             const selector = new StringSelectMenuBuilder()
                 .setCustomId('shop:filtrar')
-                .setPlaceholder('Filtrar por categoria')
+                .setPlaceholder('Filter by category')
                 .addOptions(
                     new StringSelectMenuOptionBuilder()
-                        .setLabel('Todos los productos')
+                        .setLabel('All products')
                         .setValue('-1')
                         .setDefault(filtro === '-1'),
                     ...categoriasActivas.map(({ nombre, indice }) =>
@@ -518,7 +518,7 @@ class ShopSystem {
 
         if (!productos.length) {
             return interaction.reply({
-                components: [ui.info(this.emojis, 'Todavia no hay productos publicados.')],
+                components: [ui.info(this.emojis, 'No products have been published yet.')],
                 flags: ui.V2_EFIMERO
             });
         }
@@ -542,7 +542,7 @@ class ShopSystem {
 
         if (!producto || !producto.visible) {
             return interaction.reply({
-                components: [ui.error(this.emojis, 'Ese producto ya no esta disponible.')],
+                components: [ui.error(this.emojis, 'That product is no longer available.')],
                 flags: ui.V2_EFIMERO
             });
         }
@@ -559,7 +559,7 @@ class ShopSystem {
         const tickets = this.client.sistemas?.ticket;
         if (!tickets) {
             return interaction.reply({
-                components: [ui.error(this.emojis, 'El sistema de tickets no esta disponible.')],
+                components: [ui.error(this.emojis, 'The ticket system is currently unavailable.')],
                 flags: ui.V2_EFIMERO
             });
         }

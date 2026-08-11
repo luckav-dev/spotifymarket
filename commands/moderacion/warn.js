@@ -39,11 +39,11 @@ module.exports = {
         const activos = mod.avisosDe(usuario.id).length;
 
         await mod.notificar(usuario, {
-            titulo: 'Has recibido un aviso',
+            titulo: 'You have received a warning',
             emoji: 'aviso',
             guild: interaction.guild,
             motivo,
-            extra: { etiqueta: 'Avisos activos', valor: String(activos) }
+            extra: { etiqueta: 'Active warnings', valor: String(activos) }
         });
 
         await client.sistemas.log?.sancion({
