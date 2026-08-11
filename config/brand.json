@@ -1,0 +1,15 @@
+{
+  "nombre": "Spotify Market",
+  "assets": {
+    "bannerPrincipal": "assets/brand/3d banner.png",
+    "bannerCatalogo": "assets/brand/banner2.png",
+    "bannerAlternativo": "assets/brand/banner.png",
+    "logo": "assets/brand/SpotifyMarket.png",
+    "animacion": "assets/brand/spotify gif.gif"
+  },
+  "enlaces": {
+    "web": "",
+    "soporte": "",
+    "terminos": ""
+  }
+}

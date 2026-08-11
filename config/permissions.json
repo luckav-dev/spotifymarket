@@ -1,0 +1,24 @@
+{
+  "roles": {
+    "administrador": { "roleId": "1416774392574119984", "nombre": "Administrador", "nivel": 5 },
+    "moderador": { "roleId": "1416774392574119981", "nombre": "Moderador", "nivel": 3 },
+    "soporte": { "roleId": "1416774392574119981", "nombre": "Soporte", "nivel": 1 }
+  },
+  "permisos": {
+    "claim": 1,
+    "liberar": 1,
+    "menuAdmin": 1,
+    "notificarUsuario": 1,
+    "cerrar": 1,
+    "anadirUsuario": 1,
+    "prioridad": 1,
+    "renombrar": 1,
+    "notas": 1,
+    "estadoServicio": 3,
+    "gestionarSugerencias": 3,
+    "bloquearTickets": 3,
+    "reabrir": 3,
+    "cierreForzado": 3,
+    "eliminar": 5
+  }
+}

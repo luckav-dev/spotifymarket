@@ -1,0 +1,20 @@
+{
+  "intents": [
+    "Guilds",
+    "GuildMembers",
+    "GuildMessages",
+    "GuildModeration",
+    "GuildVoiceStates",
+    "GuildExpressions",
+    "GuildScheduledEvents",
+    "GuildInvites",
+    "MessageContent"
+  ],
+  "presencia": {
+    "estado": "online",
+    "actividad": {
+      "tipo": "Custom",
+      "nombre": ""
+    }
+  }
+}

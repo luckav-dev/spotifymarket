@@ -1,0 +1,19 @@
+node_modules/
+
+# Secretos
+.env
+
+# Artefactos generados en ejecucion
+emojis.json
+database/*.json
+database/backups/
+config/backups/
+transcripts/
+
+# Temporales de escritura atomica
+*.tmp
+*.corrupto-*
+
+# Sistema
+.DS_Store
+*.log

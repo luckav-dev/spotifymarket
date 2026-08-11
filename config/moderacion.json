@@ -1,0 +1,9 @@
+{
+  "notificarPorMd": true,
+  "escalado": {
+    "3": { "accion": "timeout", "duracionMs": 3600000 },
+    "5": { "accion": "timeout", "duracionMs": 86400000 },
+    "7": { "accion": "kick" },
+    "10": { "accion": "ban" }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "activo": true,
+  "canalPublicacionId": "",
+  "cooldownMs": 300000,
+  "crearHilo": true,
+  "avisarAlAutor": true,
+  "panel": {
+    "titulo": "Spotify Market | Sugerencias",
+    "descripcion": "Comparte una idea concreta, deja que la comunidad vote y sigue la respuesta del equipo.",
+    "banner": "bannerAlternativo",
+    "etiquetaBoton": "Enviar sugerencia",
+    "mostrarGuia": true
+  },
+  "votos": {
+    "activo": true,
+    "permitirCambiar": true,
+    "ocultarRecuento": false
+  },
+  "estados": {
+    "abierta": { "nombre": "Abierta", "emoji": "pregunta" },
+    "revision": { "nombre": "En revisión", "emoji": "cargando" },
+    "aceptada": { "nombre": "Aceptada", "emoji": "exito" },
+    "rechazada": { "nombre": "Rechazada", "emoji": "error" },
+    "implementada": { "nombre": "Implementada", "emoji": "celebrar" }
+  }
+}

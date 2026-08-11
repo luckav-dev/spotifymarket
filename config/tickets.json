@@ -1,0 +1,99 @@
+{
+  "panel": {
+    "titulo": "Spotify Market | Support Center",
+    "subtitulo": "Private, organized support with clear follow-up from start to finish.",
+    "descripcion": "Choose the right category so your request reaches the correct team immediately.",
+    "banner": "bannerPrincipal",
+    "tituloCategorias": "How can we help?",
+    "pasos": [
+      "Choose a category and complete the short form.",
+      "The bot will create a private channel with your information.",
+      "A team member will claim the case and assist you."
+    ],
+    "respuestaEstimada": "We reply as soon as a team member is available.",
+    "nota": "Please do not ping staff: your request is logged and the team is notified automatically.",
+    "etiquetaBoton": "Create ticket"
+  },
+  "prioridades": {
+    "1": { "nombre": "Low", "emoji": "signal_low" },
+    "2": { "nombre": "Medium", "emoji": "signal_medium" },
+    "3": { "nombre": "High", "emoji": "signal_high" }
+  },
+  "categorias": {
+    "soporte": {
+      "nombre": "Support",
+      "descripcion": "Questions, technical issues and general help",
+      "emoji": "headphone",
+      "categoriaId": "1416774394415677464",
+      "prioridadPorDefecto": 2,
+      "rolesPermitidos": ["soporte", "moderador", "administrador"],
+      "formulario": [
+        {
+          "id": "asunto",
+          "etiqueta": "Subject",
+          "descripcion": "Summarize what you need help with in one line",
+          "estilo": "short",
+          "requerido": true,
+          "maxLength": 100
+        },
+        {
+          "id": "detalles",
+          "etiqueta": "Details",
+          "descripcion": "Explain what happened, when it started and any useful context",
+          "estilo": "paragraph",
+          "requerido": true,
+          "maxLength": 1000
+        }
+      ]
+    },
+    "compra": {
+      "nombre": "Purchase",
+      "descripcion": "Orders, quotes and existing order updates",
+      "emoji": "wallet",
+      "categoriaId": "1416774394415677462",
+      "prioridadPorDefecto": 3,
+      "rolesPermitidos": ["soporte", "moderador", "administrador"],
+      "formulario": [
+        {
+          "id": "producto",
+          "etiqueta": "What do you need?",
+          "descripcion": "Tell us which product or service you are interested in",
+          "estilo": "short",
+          "requerido": true,
+          "maxLength": 100
+        },
+        {
+          "id": "requisitos",
+          "etiqueta": "Requirements",
+          "descripcion": "Features, deadline and any details we should know",
+          "estilo": "paragraph",
+          "requerido": true,
+          "maxLength": 1000
+        },
+        {
+          "id": "presupuesto",
+          "etiqueta": "Budget",
+          "descripcion": "Optional approximate budget range",
+          "estilo": "short",
+          "requerido": false,
+          "maxLength": 50
+        }
+      ]
+    }
+  },
+  "ajustes": {
+    "maxTicketsPorUsuario": 1,
+    "formatoNombre": "・🛒┇{numero}",
+    "categoriaArchivoId": "1416774394415677465",
+    "cierre": {
+      "pedirMotivo": true,
+      "motivoObligatorio": false,
+      "archivarCanal": true,
+      "permitirReabrir": true
+    },
+    "transcripciones": { "activo": true, "canalId": "1416774393853513802", "enviarAlUsuario": true },
+    "valoraciones": { "activo": true, "canalId": "1536535867265646665" },
+    "antiPingStaff": { "activo": true, "esperas": [60000, 300000, 900000] },
+    "autocierre": { "activo": true, "inactividadMs": 172800000, "avisoMs": 86400000, "intervaloMs": 900000 }
+  }
+}

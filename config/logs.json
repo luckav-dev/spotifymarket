@@ -1,0 +1,26 @@
+{
+  "activo": true,
+  "modo": "categorias",
+  "canales": {
+    "todos": "",
+    "tickets": "1416774393853513802",
+    "mensajes": "1416774393853513805",
+    "moderacion": "1416774393853513806",
+    "miembros": "1416774393853513804",
+    "servidor": "1416774393853513807",
+    "canales": "1416774393853513808",
+    "roles": "1416774394092458096",
+    "voz": "",
+    "bot": "1416774394092458097"
+  },
+  "ignorar": {
+    "canales": [],
+    "roles": [],
+    "bots": true
+  },
+  "agrupacion": {
+    "activo": true,
+    "ventanaMs": 4000,
+    "maximoPorLote": 8
+  }
+}

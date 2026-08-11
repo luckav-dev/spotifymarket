@@ -1,0 +1,51 @@
+{
+  "bienvenida": {
+    "activo": true,
+    "canalId": "1536489826218545234",
+    "titulo": "Bienvenido a {servidor}",
+    "mensaje": "{mencion}, ya formas parte de la comunidad. Revisa la informacion importante y disfruta de tu estancia.",
+    "mencionar": true,
+    "mostrarEdadCuenta": true,
+    "avisarCuentaNueva": true,
+    "avisarCuentaNuevaMs": 604800000,
+    "borrarTrasMs": 0,
+    "botones": []
+  },
+  "tarjeta": {
+    "activa": true,
+    "usarAvatarComoFondo": true,
+    "fondo": "",
+    "desenfoque": 22,
+    "velo": 0.68,
+    "degradadoInicio": "#17171c",
+    "degradadoFin": "#09090b",
+    "borde": "#ffffff",
+    "texto": "#ffffff",
+    "textoSuave": "#d4d4d8",
+    "textoPastilla": "#18181b",
+    "etiqueta": "BIENVENIDO"
+  },
+  "despedida": {
+    "activo": false,
+    "canalId": "",
+    "mensaje": "{usuario} ha dejado {servidor}.",
+    "mostrarTarjeta": false,
+    "mostrarRoles": true,
+    "mostrarTiempoEnServidor": true
+  },
+  "mensajePrivado": {
+    "activo": false,
+    "titulo": "Bienvenido a {servidor}",
+    "texto": "Gracias por unirte. Consulta los canales de informacion antes de empezar."
+  },
+  "rolesAutomaticos": {
+    "activo": false,
+    "roles": []
+  },
+  "hitos": {
+    "activo": false,
+    "cada": 100,
+    "canalId": "",
+    "mensaje": "Ya somos {miembros} miembros. Gracias por formar parte de la comunidad."
+  }
+}

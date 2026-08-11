@@ -1,0 +1,24 @@
+{
+  "activo": false,
+  "canalId": "",
+  "rolId": "",
+  "panel": {
+    "titulo": "Spotify Market | Verificación",
+    "subtitulo": "Protege tu cuenta y desbloquea el acceso completo al servidor.",
+    "descripcion": "La verificación confirma que eres miembro de la comunidad y aplica automáticamente el rol configurado.",
+    "logo": "logo",
+    "banner": "bannerAlternativo",
+    "pasos": [
+      "Lee las normas y la información importante del servidor.",
+      "Pulsa el botón Verificarme situado al final del panel.",
+      "Recibirás el rol y el acceso se actualizará al instante."
+    ],
+    "beneficios": [
+      "Acceso a los canales de la comunidad.",
+      "Permiso para abrir tickets y consultar el catálogo.",
+      "Registro interno para evitar verificaciones duplicadas."
+    ],
+    "nota": "Al verificarte confirmas que has leído y aceptas las normas.",
+    "etiquetaBoton": "Verificarme"
+  }
+}

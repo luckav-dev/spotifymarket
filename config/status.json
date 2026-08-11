@@ -1,0 +1,38 @@
+{
+  "activo": true,
+  "titulo": "Spotify Market | Service Status",
+  "descripcion": "A concise, live overview of store and support availability.",
+  "estadoPorDefecto": "abierto",
+  "mostrarHistorial": true,
+  "historialMaximo": 1,
+  "estados": {
+    "abierto": {
+      "nombre": "Operational",
+      "descripcion": "Orders and support tickets are being handled normally.",
+      "emoji": "exito",
+      "porcentaje": 100,
+      "orden": 1
+    },
+    "ocupado": {
+      "nombre": "High demand",
+      "descripcion": "Services are available, but replies may take longer than usual.",
+      "emoji": "aviso",
+      "porcentaje": 75,
+      "orden": 2
+    },
+    "cerrado": {
+      "nombre": "Offline",
+      "descripcion": "New requests will be reviewed when the team is available again.",
+      "emoji": "error",
+      "porcentaje": 0,
+      "orden": 3
+    },
+    "mantenimiento": {
+      "nombre": "Maintenance",
+      "descripcion": "Services are being updated; some orders or deliveries may be delayed.",
+      "emoji": "cargando",
+      "porcentaje": 40,
+      "orden": 4
+    }
+  }
+}

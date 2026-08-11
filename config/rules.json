@@ -1,0 +1,104 @@
+{
+  "panel": {
+    "titulo": "Spotify Market | Normas",
+    "subtitulo": "Información clara para comprar, participar y pedir ayuda con seguridad.",
+    "descripcion": "Selecciona una categoría para consultar únicamente las normas que necesitas.",
+    "banner": "bannerAlternativo",
+    "placeholder": "Selecciona una categoría de normas",
+    "nota": "La versión válida es siempre la publicada por el equipo de administración."
+  },
+  "categorias": {
+    "generales": {
+      "nombre": "Normas generales",
+      "descripcion": "Convivencia, respeto y uso correcto del servidor.",
+      "emoji": "rules",
+      "secciones": [
+        {
+          "titulo": "Respeto y convivencia",
+          "contenido": [
+            "Trata con respeto a todos los miembros y al equipo.",
+            "No se permite acoso, discriminación, amenazas ni contenido ofensivo.",
+            "Evita discusiones personales y utiliza los canales para su finalidad."
+          ]
+        },
+        {
+          "titulo": "Contenido y publicidad",
+          "contenido": [
+            "No hagas spam, flood ni publicidad sin autorización.",
+            "No compartas contenido malicioso, engañoso o inapropiado.",
+            "Respeta las decisiones de moderación y utiliza soporte para recurrirlas."
+          ]
+        }
+      ]
+    },
+    "compras": {
+      "nombre": "Compras y pedidos",
+      "descripcion": "Proceso seguro para presupuestos, pagos y entregas.",
+      "emoji": "wallet",
+      "secciones": [
+        {
+          "titulo": "Antes de comprar",
+          "contenido": [
+            "Confirma en el ticket el producto, alcance, precio y plazo.",
+            "Utiliza únicamente los métodos y cuentas indicados por el equipo autorizado.",
+            "No cierres el ticket hasta comprobar que toda la información es correcta."
+          ]
+        },
+        {
+          "titulo": "Seguimiento",
+          "contenido": [
+            "Mantén la conversación y los comprobantes dentro del ticket.",
+            "Explica los cambios con claridad; una ampliación puede requerir nueva valoración.",
+            "Si detectas una suplantación, avisa inmediatamente a administración."
+          ]
+        }
+      ]
+    },
+    "soporte": {
+      "nombre": "Soporte y tickets",
+      "descripcion": "Cómo obtener ayuda de forma rápida y ordenada.",
+      "emoji": "ticket",
+      "secciones": [
+        {
+          "titulo": "Abrir una solicitud",
+          "contenido": [
+            "Elige la categoría correcta y resume el problema en el asunto.",
+            "Incluye contexto, capturas y mensajes de error cuando sea posible.",
+            "No menciones repetidamente al staff: el sistema avisa automáticamente."
+          ]
+        },
+        {
+          "titulo": "Durante la atención",
+          "contenido": [
+            "Responde en el mismo ticket y evita abrir duplicados.",
+            "No publiques datos privados o credenciales completas.",
+            "Confirma si la solución ha funcionado antes de cerrar el caso."
+          ]
+        }
+      ]
+    },
+    "seguridad": {
+      "nombre": "Seguridad",
+      "descripcion": "Protección de cuentas, credenciales y comunicaciones.",
+      "emoji": "guardian",
+      "secciones": [
+        {
+          "titulo": "Protege tu cuenta",
+          "contenido": [
+            "Activa la autenticación en dos pasos de Discord.",
+            "El equipo nunca necesita tu contraseña, token de bot ni código 2FA.",
+            "Comprueba los roles antes de confiar en mensajes privados."
+          ]
+        },
+        {
+          "titulo": "Reportar un riesgo",
+          "contenido": [
+            "Guarda capturas, IDs y enlaces de mensajes sospechosos.",
+            "Abre un ticket de soporte y evita enfrentarte públicamente al usuario.",
+            "Cambia tus credenciales inmediatamente si crees que han sido expuestas."
+          ]
+        }
+      ]
+    }
+  }
+}

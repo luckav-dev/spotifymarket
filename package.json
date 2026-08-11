@@ -1,0 +1,22 @@
+{
+  "name": "spotifymarketbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot profesional de Spotify Market con tickets, catalogo, moderacion, bienvenida, estado y sugerencias.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "check": "node scripts/check.js",
+    "test": "node scripts/check.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.5",
+    "discord-html-transcripts": "3.2.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}
