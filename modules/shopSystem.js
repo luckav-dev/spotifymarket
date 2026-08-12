@@ -66,6 +66,11 @@ class ShopSystem {
 
     /** Productos publicados, ordenados por categoria y nombre. */
     visibles() {
+        const sellauth = this.client.sistemas?.sellauth;
+        if (sellauth?.estaConfigurado() && sellauth.db.data.productosInicializados) {
+            return sellauth.productosVisibles();
+        }
+
         return Object.values(this.db.data.productos)
             .filter(p => p.visible)
             .sort((a, b) =>
@@ -85,7 +90,7 @@ class ShopSystem {
     precioTexto(producto) {
         try {
             return new Intl.NumberFormat('es-ES', {
-                style: 'currency', currency: this.config.moneda,
+                style: 'currency', currency: producto.moneda || this.config.moneda,
                 minimumFractionDigits: 2, maximumFractionDigits: 2
             }).format(producto.precio);
         } catch {
@@ -213,6 +218,13 @@ class ShopSystem {
             )
         );
 
+        const botonCompra = new ButtonBuilder()
+            .setLabel(agotado ? 'Unavailable' : (p.checkoutUrl ? 'Buy on SellAuth' : 'Buy'))
+            .setStyle(agotado ? ButtonStyle.Secondary : (p.checkoutUrl ? ButtonStyle.Link : ButtonStyle.Success))
+            .setDisabled(agotado);
+        if (p.checkoutUrl && !agotado) botonCompra.setURL(p.checkoutUrl);
+        else botonCompra.setCustomId(`shop:comprar:${p.id}`);
+
         c.addSeparatorComponents(ui.linea());
         c.addSectionComponents(
             new SectionBuilder()
@@ -225,11 +237,7 @@ class ShopSystem {
                 )
                 .setButtonAccessory(
                     ui.conEmoji(
-                        new ButtonBuilder()
-                            .setCustomId(`shop:comprar:${p.id}`)
-                            .setLabel(agotado ? 'Unavailable' : 'Buy')
-                            .setStyle(agotado ? ButtonStyle.Secondary : ButtonStyle.Success)
-                            .setDisabled(agotado),
+                        botonCompra,
                         this.emojis.get(agotado ? 'error' : 'wallet')
                     )
                 )
@@ -257,9 +265,8 @@ class ShopSystem {
             )
         );
 
-        const categoriasActivas = this.config.categorias
+        const categoriasActivas = this.categoriasVisibles()
             .map((nombre, indice) => ({ nombre, indice }))
-            .filter(({ nombre }) => this.visibles().some(producto => producto.categoria === nombre))
             .slice(0, 24);
         if (categoriasActivas.length > 1) {
             const selector = new StringSelectMenuBuilder()
@@ -511,7 +518,7 @@ class ShopSystem {
     }
 
     async mostrarPagina(interaction, pagina, filtro = '-1') {
-        const categoria = Number(filtro) >= 0 ? this.config.categorias[Number(filtro)] : null;
+        const categoria = Number(filtro) >= 0 ? this.categoriasVisibles()[Number(filtro)] : null;
         const productos = categoria
             ? this.visibles().filter(producto => producto.categoria === categoria)
             : this.visibles();
@@ -538,7 +545,7 @@ class ShopSystem {
     }
 
     async comprar(interaction, productoId) {
-        const producto = this.db.data.productos[productoId];
+        const producto = this.visibles().find(item => item.id === productoId);
 
         if (!producto || !producto.visible) {
             return interaction.reply({
@@ -599,6 +606,11 @@ class ShopSystem {
             .replace(/&gt;/g, '>')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
+    }
+
+    categoriasVisibles() {
+        return [...new Set(this.visibles().map(producto => producto.categoria).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
     }
 
     async anadir({ nombre, descripcion, precio, stock, categoria, imagen }) {

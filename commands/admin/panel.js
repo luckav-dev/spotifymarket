@@ -13,6 +13,7 @@ const PANELES = [
     { value: 'tickets', name: 'Ticket support panel', system: 'ticket' },
     { value: 'verification', name: 'Verification panel', system: 'verify' },
     { value: 'catalog', name: 'Product catalog', system: 'shop' },
+    { value: 'reviews', name: 'Verified reviews and review guide', system: 'sellauth' },
     { value: 'welcome-preview', name: 'Welcome preview', system: 'welcome' },
     { value: 'rules', name: 'Rules navigator', system: 'rules' },
     { value: 'service-status', name: 'Service status', system: 'status' },

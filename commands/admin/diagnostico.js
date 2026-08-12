@@ -43,6 +43,11 @@ function referenciasConfiguradas() {
     const suggestions = config.cargar('suggestions');
     if (suggestions.canalPublicacionId) canales.push(['Sugerencias', suggestions.canalPublicacionId]);
 
+    const sellauth = config.cargar('sellauth');
+    if (sellauth.channels?.reviews) canales.push(['SellAuth · Reseñas', sellauth.channels.reviews]);
+    if (sellauth.channels?.restocks) canales.push(['SellAuth · Restocks', sellauth.channels.restocks]);
+    if (sellauth.channels?.priceUpdates) canales.push(['SellAuth · Precios', sellauth.channels.priceUpdates]);
+
     for (const [clave, id] of Object.entries(config.cargar('logs').canales ?? {})) {
         if (id) canales.push([`Logs · ${clave}`, id]);
     }
@@ -68,6 +73,17 @@ module.exports = {
         const errores = revisiones.flatMap(r => r.errores.map(mensaje => `**${r.nombre}:** ${mensaje}`));
         const avisos = revisiones.flatMap(r => r.avisos.map(mensaje => `**${r.nombre}:** ${mensaje}`));
         const recursos = referenciasConfiguradas();
+
+        const sellauth = config.cargar('sellauth');
+        if (sellauth.enabled && !process.env.SELLAUTH_API_KEY?.trim()) {
+            errores.push('**SellAuth:** falta `SELLAUTH_API_KEY` en el `.env`.');
+        }
+        if (sellauth.enabled && !(process.env.SELLAUTH_SHOP_ID?.trim() || String(sellauth.shopId ?? '').trim())) {
+            errores.push('**SellAuth:** falta `SELLAUTH_SHOP_ID` en el `.env` o `shopId` en config.');
+        }
+        if (sellauth.webhook?.enabled && !process.env.SELLAUTH_WEBHOOK_SECRET?.trim()) {
+            avisos.push('**SellAuth webhook:** falta `SELLAUTH_WEBHOOK_SECRET`; las reseñas dependerán de la sincronización periódica.');
+        }
 
         for (const [nombre, id, tipo] of recursos.canales) {
             const canal = interaction.guild.channels.cache.get(id);

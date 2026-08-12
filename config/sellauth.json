@@ -1,0 +1,62 @@
+{
+  "enabled": true,
+  "apiBaseUrl": "https://api.sellauth.com/v1",
+  "shopId": "95519",
+  "storefrontUrl": "",
+  "productPathTemplate": "{storefrontUrl}/product/{path}",
+  "channels": {
+    "reviews": "1416774394415677461",
+    "restocks": "1416774394092458105",
+    "priceUpdates": "1536490079009382501"
+  },
+  "sync": {
+    "intervalMs": 90000,
+    "products": true,
+    "feedbacks": true,
+    "importExistingFeedbacks": false,
+    "feedbackHistoryLimit": 25
+  },
+  "webhook": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8790,
+    "path": "/webhooks/sellauth",
+    "timestampToleranceSeconds": 300
+  },
+  "reviews": {
+    "title": "Verified Customer Review",
+    "banner": "bannerAlternativo",
+    "buttonLabel": "Add a review",
+    "detailsButtonLabel": "View full details",
+    "guideTitle": "HOW TO REVIEW",
+    "guideLines": [
+      "Press **Add a review** below.",
+      "Enter the invoice ID for the product you purchased.",
+      "Choose a rating and describe your experience.",
+      "Invalid or reused invoices are rejected automatically.",
+      "A verified review keeps the purchase warranty attached to your order."
+    ],
+    "validInvoiceStatuses": ["completed", "partially_completed"],
+    "publishedFeedbackStatuses": ["published"],
+    "requireDiscordMatchWhenAvailable": true,
+    "allowUnlinkedInvoices": true
+  },
+  "announcements": {
+    "mentionEveryone": true,
+    "restocks": {
+      "enabled": true,
+      "title": "PRODUCT RESTOCKED",
+      "description": "This product is available again and ready to order."
+    },
+    "priceChanges": {
+      "enabled": true,
+      "titleDrop": "PRICE DROPPED",
+      "titleIncrease": "PRICE UPDATED",
+      "description": "The product price has just been updated on SellAuth."
+    },
+    "newProducts": {
+      "enabled": false,
+      "title": "NEW PRODUCT"
+    }
+  }
+}

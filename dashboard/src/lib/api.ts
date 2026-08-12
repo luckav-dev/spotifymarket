@@ -91,7 +91,7 @@ export type Estado = {
     valoraciones: number;
     valoracionMedia: number | null;
   };
-  catalogo: { total: number; visibles: number };
+  catalogo: { total: number; visibles: number; fuente?: 'local' | 'sellauth'; ultimaSincronizacion?: number | null };
   emojis: number;
   configuracion: { errores: number; avisos: number };
 };
@@ -121,6 +121,8 @@ export type Producto = {
   categoria: string;
   imagen: string;
   visible: boolean;
+  moneda?: string;
+  checkoutUrl?: string;
 };
 
 export type TicketDashboard = {
@@ -197,7 +199,7 @@ export const api = {
 
   emojis: () => pedir<{ emojis: Record<string, string> }>('/api/emojis'),
 
-  productos: () => pedir<{ productos: Producto[] }>('/api/productos'),
+  productos: () => pedir<{ productos: Producto[]; fuente: 'local' | 'sellauth' }>('/api/productos'),
 
   crearProducto: (producto: Omit<Producto, 'id' | 'visible'>) =>
     pedir<{ producto: Producto }>('/api/productos', { metodo: 'POST', cuerpo: producto }),

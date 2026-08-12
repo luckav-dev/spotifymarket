@@ -147,6 +147,7 @@ function apagar(senal) {
     logger.info('bot', `Recibido ${senal}, cerrando...`);
 
     client.api?.detener();
+    client.sistemas?.sellauth?.detener();
 
     Database.flushAll();
     logger.ok('db', 'Datos volcados a disco');

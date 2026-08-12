@@ -12,6 +12,9 @@ const DESTINOS = {
     transcripciones: ['tickets', 'ajustes.transcripciones.canalId', 'Ticket transcripts'],
     valoraciones: ['tickets', 'ajustes.valoraciones.canalId', 'Ticket ratings'],
     sugerencias: ['suggestions', 'canalPublicacionId', 'Suggestions'],
+    'sellauth-reviews': ['sellauth', 'channels.reviews', 'SellAuth reviews'],
+    'sellauth-restocks': ['sellauth', 'channels.restocks', 'SellAuth restocks'],
+    'sellauth-prices': ['sellauth', 'channels.priceUpdates', 'SellAuth price updates'],
     'logs-tickets': ['logs', 'canales.tickets', 'Ticket logs'],
     'logs-mensajes': ['logs', 'canales.mensajes', 'Message logs'],
     'logs-moderacion': ['logs', 'canales.moderacion', 'Moderation logs'],
@@ -117,7 +120,7 @@ module.exports = {
         return interaction.respond(categorias);
     },
 
-    async execute(interaction, { emojis, ui }) {
+    async execute(interaction, { client, emojis, ui }) {
         const sub = interaction.options.getSubcommand();
 
         if (sub === 'channel' || sub === 'clear-channel') {
@@ -127,6 +130,9 @@ module.exports = {
 
             const canal = sub === 'channel' ? interaction.options.getChannel('channel') : null;
             const guardado = guardarReferencia(definicion, canal?.id ?? '');
+            if (canal && funcion === 'sellauth-reviews') {
+                await client.sistemas?.sellauth?.publicarPanel?.(canal);
+            }
             return ui.responderEfimero(interaction, ui.exito(emojis,
                 canal
                     ? `**${guardado.etiqueta}** utilizara ${canal}.\n-# Guardado en config/${guardado.archivo}.json · ${guardado.recorrido}`

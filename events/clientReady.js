@@ -11,6 +11,7 @@ const LogSystem = require('../modules/logSystem');
 const VerifySystem = require('../modules/verifySystem');
 const ModerationSystem = require('../modules/moderationSystem');
 const ShopSystem = require('../modules/shopSystem');
+const SellAuthSystem = require('../modules/sellAuthSystem');
 const WelcomeSystem = require('../modules/welcomeSystem');
 const RulesSystem = require('../modules/rulesSystem');
 const StatusSystem = require('../modules/statusSystem');
@@ -36,6 +37,7 @@ module.exports = {
         client.sistemas = {
             ticket: new TicketSystem(client, emojis),
             verify: new VerifySystem(client, emojis),
+            sellauth: new SellAuthSystem(client, emojis),
             shop: new ShopSystem(client, emojis),
             welcome: new WelcomeSystem(client, emojis),
             rules: new RulesSystem(client, emojis),
@@ -47,6 +49,7 @@ module.exports = {
 
         client.sistemas.log.registrar();
         client.sistemas.verify.iniciar();
+        await client.sistemas.sellauth.iniciar();
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
         await client.sistemas.welcome.iniciar();

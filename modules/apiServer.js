@@ -30,7 +30,7 @@ const MAX_CUERPO_BYTES = 512 * 1024;
 /** Solo estos archivos se pueden leer y escribir. Cierra el paso a ../ */
 const CONFIGS = new Set([
     'bot', 'brand', 'emojis', 'permissions', 'tickets', 'verify', 'welcome', 'rules', 'logs', 'moderacion', 'shop',
-    'status', 'suggestions'
+    'sellauth', 'status', 'suggestions'
 ]);
 
 class ApiServer {
@@ -195,7 +195,11 @@ class ApiServer {
 
             case 'GET productos':
                 return this.responder(respuesta, 200, {
-                    productos: Object.values(this.client.sistemas.shop.db.data.productos)
+                    productos: this.client.sistemas.sellauth?.estaConfigurado()
+                        && this.client.sistemas.sellauth.db.data.productosInicializados
+                        ? this.client.sistemas.sellauth.productos()
+                        : Object.values(this.client.sistemas.shop.db.data.productos),
+                    fuente: this.client.sistemas.sellauth?.estaConfigurado() ? 'sellauth' : 'local'
                 });
 
             case 'POST productos':
@@ -227,7 +231,11 @@ class ApiServer {
 
     estado() {
         const tickets = this.client.sistemas.ticket.db.data;
-        const productos = this.client.sistemas.shop.db.data.productos;
+        const sellauthActivo = this.client.sistemas.sellauth?.estaConfigurado()
+            && this.client.sistemas.sellauth.db.data.productosInicializados;
+        const productos = sellauthActivo
+            ? this.client.sistemas.sellauth.productos()
+            : Object.values(this.client.sistemas.shop.db.data.productos);
         const revisiones = validacionConfig.validarTodo();
 
         return {
@@ -248,8 +256,10 @@ class ApiServer {
                     : null
             },
             catalogo: {
-                total: Object.keys(productos).length,
-                visibles: Object.values(productos).filter(p => p.visible).length
+                total: productos.length,
+                visibles: productos.filter(p => p.visible).length,
+                fuente: sellauthActivo ? 'sellauth' : 'local',
+                ultimaSincronizacion: this.client.sistemas.sellauth?.db.data.ultimaSincronizacion ?? null
             },
             emojis: Object.keys(this.emojis.all()).length,
             configuracion: {
@@ -434,6 +444,9 @@ class ApiServer {
     // ------------------------------------------------------------ productos
 
     async crearProducto(respuesta, cuerpo) {
+        if (this.client.sistemas.sellauth?.estaConfigurado()) {
+            return this.responder(respuesta, 409, { error: 'SellAuth es la fuente del catalogo; edita el producto alli.' });
+        }
         const problemas = ApiServer.validarProducto(cuerpo);
         if (problemas.length) return this.responder(respuesta, 400, { error: problemas.join(' ') });
         if (!config.cargar('shop').categorias.includes(cuerpo.categoria)) {
@@ -445,6 +458,9 @@ class ApiServer {
     }
 
     async editarProducto(respuesta, id, cuerpo) {
+        if (this.client.sistemas.sellauth?.estaConfigurado()) {
+            return this.responder(respuesta, 409, { error: 'SellAuth es la fuente del catalogo; edita el producto alli.' });
+        }
         const actual = this.client.sistemas.shop.db.data.productos[id];
         if (!actual) return this.responder(respuesta, 404, { error: 'Producto no encontrado' });
 
@@ -460,6 +476,9 @@ class ApiServer {
     }
 
     async borrarProducto(respuesta, id) {
+        if (this.client.sistemas.sellauth?.estaConfigurado()) {
+            return this.responder(respuesta, 409, { error: 'SellAuth es la fuente del catalogo; edita el producto alli.' });
+        }
         const producto = await this.client.sistemas.shop.eliminar(id);
         return producto
             ? this.responder(respuesta, 200, { producto })
@@ -535,7 +554,8 @@ class ApiServer {
             catalogo: 'shop',
             normas: 'rules',
             estado: 'status',
-            sugerencias: 'suggest'
+            sugerencias: 'suggest',
+            resenas: 'sellauth'
         };
         const sistema = this.client.sistemas[sistemas[tipo]];
 

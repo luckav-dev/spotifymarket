@@ -316,6 +316,59 @@ function validarShop(datos, r) {
     r.error(!categoriasTicket[datos.compra?.categoriaTicket], 'compra.categoriaTicket no existe en config/tickets.json.');
 }
 
+function validarSellAuth(datos, r) {
+    r.error(typeof datos.enabled !== 'boolean', 'enabled tiene que ser true o false.');
+    r.error(!/^https:\/\/[^\s]+$/i.test(datos.apiBaseUrl ?? ''), 'apiBaseUrl tiene que ser una URL https.');
+    r.aviso(datos.enabled && !/^\d+$/.test(String(process.env.SELLAUTH_SHOP_ID || datos.shopId || '')),
+        'shopId esta vacio en config; puedes definirlo con SELLAUTH_SHOP_ID en el .env.');
+    r.error(datos.storefrontUrl && !/^https:\/\/[^\s]+$/i.test(datos.storefrontUrl),
+        'storefrontUrl tiene que ser una URL https o quedarse vacia.');
+    r.error(!texto(datos.productPathTemplate)
+        || !datos.productPathTemplate.includes('{storefrontUrl}')
+        || !datos.productPathTemplate.includes('{path}'),
+    'productPathTemplate tiene que incluir {storefrontUrl} y {path}.');
+
+    r.error(!objeto(datos.channels), 'channels tiene que ser un objeto.');
+    for (const clave of ['reviews', 'restocks', 'priceUpdates']) {
+        validarId(r, datos.channels?.[clave], `channels.${clave}`);
+    }
+
+    r.error(!objeto(datos.sync), 'sync tiene que ser un objeto.');
+    r.error(!Number.isFinite(datos.sync?.intervalMs) || datos.sync.intervalMs < 30000,
+        'sync.intervalMs tiene que ser de al menos 30000 ms.');
+    r.error(!Number.isInteger(datos.sync?.feedbackHistoryLimit)
+        || datos.sync.feedbackHistoryLimit < 1
+        || datos.sync.feedbackHistoryLimit > 100,
+    'sync.feedbackHistoryLimit tiene que estar entre 1 y 100.');
+
+    r.error(!objeto(datos.webhook), 'webhook tiene que ser un objeto.');
+    r.error(!Number.isInteger(datos.webhook?.port) || datos.webhook.port < 1 || datos.webhook.port > 65535,
+        'webhook.port no es valido.');
+    r.error(!/^\/[a-z0-9/_-]+$/i.test(datos.webhook?.path ?? ''), 'webhook.path no es una ruta valida.');
+    r.error(!Number.isFinite(datos.webhook?.timestampToleranceSeconds)
+        || datos.webhook.timestampToleranceSeconds < 60
+        || datos.webhook.timestampToleranceSeconds > 3600,
+    'webhook.timestampToleranceSeconds tiene que estar entre 60 y 3600.');
+
+    r.error(!objeto(datos.reviews), 'reviews tiene que ser un objeto.');
+    r.error(!texto(datos.reviews?.title), 'reviews.title es obligatorio.');
+    r.error(!texto(datos.reviews?.buttonLabel) || datos.reviews.buttonLabel.length > 80,
+        'reviews.buttonLabel es obligatorio y admite hasta 80 caracteres.');
+    r.error(!texto(datos.reviews?.guideTitle), 'reviews.guideTitle es obligatorio.');
+    r.error(!Array.isArray(datos.reviews?.guideLines) || !datos.reviews.guideLines.length,
+        'reviews.guideLines tiene que contener instrucciones.');
+    r.error((datos.reviews?.guideLines ?? []).join('\n').length > 2200,
+        'reviews.guideLines supera el tamaño seguro.');
+    r.error(!Array.isArray(datos.reviews?.validInvoiceStatuses) || !datos.reviews.validInvoiceStatuses.length,
+        'reviews.validInvoiceStatuses tiene que contener estados.');
+    validarMedia(r, datos.reviews?.banner, 'reviews.banner');
+
+    r.error(!objeto(datos.announcements), 'announcements tiene que ser un objeto.');
+    for (const clave of ['restocks', 'priceChanges', 'newProducts']) {
+        r.error(!objeto(datos.announcements?.[clave]), `announcements.${clave} tiene que ser un objeto.`);
+    }
+}
+
 function validarStatus(datos, r) {
     r.error(typeof datos.activo !== 'boolean', 'activo tiene que ser true o false.');
     validarPanel(r, datos, 'estado');
@@ -366,6 +419,7 @@ const VALIDADORES = {
     logs: validarLogs,
     moderacion: validarModeracion,
     shop: validarShop,
+    sellauth: validarSellAuth,
     status: validarStatus,
     suggestions: validarSuggestions
 };

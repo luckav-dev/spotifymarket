@@ -54,16 +54,23 @@ module.exports = {
                 .map(item => ({ name: item.name, value: item.value })));
         }
         if (focused.name === 'category') {
-            return interaction.respond(config.cargar('shop').categorias
+            const categories = client.sistemas.shop.categoriasVisibles().length
+                ? client.sistemas.shop.categoriasVisibles()
+                : config.cargar('shop').categorias;
+            return interaction.respond(categories
                 .filter(category => category.toLowerCase().includes(query))
                 .slice(0, LIMIT)
                 .map(category => ({ name: category, value: category })));
         }
 
-        const products = Object.values(client.sistemas.shop.db.data.productos)
+        const sellauth = client.sistemas.sellauth;
+        const products = sellauth?.estaConfigurado() && sellauth.db.data.productosInicializados
+            ? sellauth.productos()
+            : Object.values(client.sistemas.shop.db.data.productos);
+        const matches = products
             .filter(product => product.nombre.toLowerCase().includes(query) || product.id.toLowerCase().includes(query))
             .slice(0, LIMIT);
-        return interaction.respond(products.map(product => ({
+        return interaction.respond(matches.map(product => ({
             name: `${product.nombre} · ${product.categoria}${product.visible ? '' : ' · hidden'}`.slice(0, 100),
             value: product.id
         })));
@@ -75,9 +82,21 @@ module.exports = {
         const productId = interaction.options.getString('product');
         const category = interaction.options.getString('category');
         const visible = interaction.options.getBoolean('visible');
+        const sellauthActivo = client.sistemas.sellauth?.estaConfigurado()
+            && client.sistemas.sellauth.db.data.productosInicializados;
 
         if (!ACTIONS.some(item => item.value === action)) {
             return interaction.reply({ components: [ui.error(emojis, 'Select a valid catalog action from autocomplete.')], flags: ui.V2_EFIMERO });
+        }
+
+        if (sellauthActivo && ['add', 'edit', 'delete', 'visibility'].includes(action)) {
+            return interaction.reply({
+                components: [ui.info(
+                    emojis,
+                    'SellAuth es ahora la fuente del catalogo. Edita el producto en SellAuth y el bot lo sincronizara automaticamente.\n-# Usa `/sellauth action:sync` si necesitas aplicar el cambio al instante.'
+                )],
+                flags: ui.V2_EFIMERO
+            });
         }
 
         if (action === 'add') {
@@ -120,7 +139,9 @@ module.exports = {
             });
         }
 
-        const products = Object.values(shop.db.data.productos);
+        const products = sellauthActivo
+            ? client.sistemas.sellauth.productos()
+            : Object.values(shop.db.data.productos);
         if (!products.length) {
             return interaction.editReply({ components: [ui.info(emojis, 'El catálogo está vacío. Usa `/product action:add category:...`.')], flags: ui.V2 });
         }

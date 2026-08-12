@@ -1,7 +1,8 @@
 # spotifymarketbot
 
 Bot de Discord de Spotify Market: soporte por tickets, moderación, registros,
-catálogo, bienvenida, estado del servicio y sugerencias.
+catálogo SellAuth, facturas, reseñas verificadas, avisos de stock/precio,
+bienvenida, estado del servicio y sugerencias.
 
 Construido sobre **discord.js 14.27** usando **Components V2** en exclusiva. No
 se usan embeds, ni `content` plano, ni accent colors: toda la interfaz sale de
@@ -19,6 +20,12 @@ npm install
 cp .env.example .env    # rellena DISCORD_TOKEN, CLIENT_ID y GUILD_ID
 npm start
 ```
+
+Para conectar la tienda añade también `SELLAUTH_API_KEY`, `SELLAUTH_SHOP_ID` y
+`SELLAUTH_WEBHOOK_SECRET`. La clave API se obtiene en **Account > Developers**
+de SellAuth; el secreto de webhook, en **Storefront > Configure >
+Miscellaneous**. Ninguno de esos secretos se guarda en `config/` ni se expone
+al dashboard.
 
 En el portal de desarrolladores, dentro de **Bot > Privileged Gateway Intents**,
 activa los intents que declares en `config/bot.json`. Con la configuracion por
@@ -104,6 +111,7 @@ Al anadir nuevos `.png` sin reiniciar, resincroniza con `/emojis`.
 | `config/logs.json` | Canal por categoria, filtros y agrupacion |
 | `config/moderacion.json` | Aviso por MD y escalado por acumulacion de avisos |
 | `config/shop.json` | Moneda, categorias, textos del catalogo y categoria de ticket para la compra |
+| `config/sellauth.json` | Sincronizacion, canales de reseñas/restocks/precios, webhook y textos publicos |
 | `config/status.json` | Estados operativos, porcentaje, nota e historial del servicio |
 | `config/suggestions.json` | Panel, canal, votos y estados de las sugerencias |
 

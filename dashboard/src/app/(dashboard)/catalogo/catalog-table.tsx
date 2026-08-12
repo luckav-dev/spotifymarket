@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { AccionesFila } from './product-row-actions';
 
-export function CatalogTable({ productos, categorias }: { productos: Producto[]; categorias: string[] }) {
+export function CatalogTable({ productos, categorias, editable = true }: { productos: Producto[]; categorias: string[]; editable?: boolean }) {
   const columns: ColumnDef<Producto>[] = [
     {
       accessorKey: 'nombre',
@@ -47,13 +47,16 @@ export function CatalogTable({ productos, categorias }: { productos: Producto[];
         </Badge>
       ),
     },
-    {
+  ];
+
+  if (editable) {
+    columns.push({
       id: 'acciones',
       enableHiding: false,
       header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => <AccionesFila producto={row.original} categorias={categorias} />,
-    },
-  ];
+    });
+  }
 
   return (
     <DataTable

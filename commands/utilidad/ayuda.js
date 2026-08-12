@@ -6,7 +6,7 @@ const GRUPOS = [
     {
         titulo: 'Administration',
         emoji: 'administrador',
-        comandos: ['publish', 'product', 'emojis', 'say', 'setup', 'diagnostics', 'ticket-stats']
+        comandos: ['publish', 'product', 'sellauth', 'emojis', 'say', 'setup', 'diagnostics', 'ticket-stats']
     },
     {
         titulo: 'Moderation',
