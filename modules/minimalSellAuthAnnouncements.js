@@ -1,14 +1,20 @@
 'use strict';
 
-const { AttachmentBuilder } = require('discord.js');
+const {
+    AttachmentBuilder,
+    ContainerBuilder,
+    TextDisplayBuilder
+} = require('discord.js');
 
 const SellAuthSystem = require('./sellAuthSystem');
 const logger = require('../utils/logger');
 const arte = require('../utils/sellAuthArtwork');
+const ui = require('../utils/ui');
 
 /**
  * Mantiene toda la integracion SellAuth original, pero simplifica los avisos
- * de restock y actualizacion de precio: solo @everyone + la imagen generada.
+ * de restock y actualizacion de precio: solo @everyone + la imagen generada,
+ * dentro de un Container de Discord Components V2.
  * Los anuncios de productos nuevos siguen usando el formato original.
  */
 class MinimalSellAuthAnnouncements extends SellAuthSystem {
@@ -48,9 +54,18 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         const nombre = arte.nombreArchivo(tipo, producto);
         const archivo = new AttachmentBuilder(buffer, { name: nombre });
 
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('@everyone')
+            )
+            .addMediaGalleryComponents(
+                ui.galeria([`attachment://${nombre}`])
+            );
+
         return canal.send({
-            content: '@everyone',
+            components: [container],
             files: [archivo],
+            flags: ui.V2,
             allowedMentions: { parse: ['everyone'] }
         });
     }
