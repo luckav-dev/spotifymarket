@@ -92,13 +92,12 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         return canal.messages.fetch(estado.messageId).catch(() => null);
     }
 
-    construirStockContainer(nombresArchivos, productos, actualizadoEn) {
+    construirStockContainer(nombresArchivos, productos) {
         const stockFinito = productos.filter(producto => producto.stock > 0)
             .reduce((total, producto) => total + Number(producto.stock), 0);
         const infinitos = productos.filter(producto => producto.stock < 0).length;
         const resumenUnidades = infinitos ? `${stockFinito}+` : String(stockFinito);
         const ajustes = this.config.stockPanel ?? {};
-        const totalPaginas = nombresArchivos.length;
 
         return new ContainerBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
@@ -113,8 +112,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 `${this.emojis.rol('producto')} **Available products:** ${ui.dato(productos.length)} · ` +
-                `${this.emojis.rol('stock')} **Ready units:** ${ui.dato(resumenUnidades)}\n` +
-                `-# HTML/Chromium stock board · ${totalPaginas} image${totalPaginas === 1 ? '' : 's'} · Auto-updated from SellAuth · ${ui.fecha(actualizadoEn, 'R')}`
+                `${this.emojis.rol('stock')} **Ready units:** ${ui.dato(resumenUnidades)}`
             ));
     }
 
@@ -143,7 +141,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             const nombres = paneles.map(panel => panel.nombre);
             const archivos = paneles.map(panel => new AttachmentBuilder(panel.buffer, { name: panel.nombre }));
             const payload = {
-                components: [this.construirStockContainer(nombres, productos, actualizadoEn)],
+                components: [this.construirStockContainer(nombres, productos)],
                 files: archivos,
                 flags: ui.V2,
                 allowedMentions: { parse: [] }
