@@ -11,14 +11,15 @@ const logger = require('./logger');
 const RAIZ = path.resolve(__dirname, '..');
 const FUENTE_RUTA = path.join(RAIZ, 'assets', 'fuentes', 'Montserrat-Variable.ttf');
 const LOGO_RUTA = path.join(RAIZ, 'assets', 'brand', 'SpotifyMarket.png');
-const ANCHO = 1600;
+const ANCHO = 1920;
+const COLUMNAS = 4;
 const PRODUCTOS_POR_PAGINA = 12;
 const MAX_PAGINAS_DISCORD = 10;
 const MAX_IMAGEN_BYTES = 6 * 1024 * 1024;
-const RENDERER_VERSION = 'html-chromium-cdp-v4';
+const RENDERER_VERSION = 'html-chromium-cdp-v5-panoramic';
 
 let recursosPromise = null;
-let chromiumCache = undefined;
+let chromiumCache;
 let browserPromise = null;
 
 const dormir = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -35,8 +36,10 @@ function escaparHtml(valor) {
 function dinero(valor, moneda = 'EUR') {
     try {
         return new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: String(moneda || 'EUR').toUpperCase(),
-            minimumFractionDigits: 2, maximumFractionDigits: 2
+            style: 'currency',
+            currency: String(moneda || 'EUR').toUpperCase(),
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         }).format(Number(valor || 0));
     } catch {
         return `${Number(valor || 0).toFixed(2)} ${String(moneda || 'EUR').toUpperCase()}`;
@@ -75,7 +78,7 @@ async function descargarImagen(url) {
     try {
         const respuesta = await fetch(url, {
             signal: controlador.signal,
-            headers: { 'User-Agent': 'SpotifyMarketStockBoard/2.0' }
+            headers: { 'User-Agent': 'SpotifyMarketStockBoard/3.0' }
         });
         if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
         const tipo = String(respuesta.headers.get('content-type') || 'image/png').split(';')[0];
@@ -132,16 +135,26 @@ function tarjeta(producto, umbral, logo) {
         : logo
             ? `<img class="fallback-logo" src="${logo}" alt="" />`
             : `<span>${escaparHtml(iniciales(producto.nombre))}</span>`;
+
     return `<article class="product-card">
-      <div class="product-main"><div class="thumb" style="--fallback:${gradienteProducto(producto)}">${imagen}</div>
-      <div class="product-copy"><div class="category">${escaparHtml(producto.categoria || 'Catalog')}</div><div class="product-name">${escaparHtml(producto.nombre)}</div></div></div>
-      <div class="divider"></div><div class="product-meta"><div><div class="meta-label">Price</div><div class="price">${escaparHtml(dinero(producto.precio, producto.moneda))}</div></div>
-      <div class="stock-badge ${badge.clase}"><span class="badge-dot"></span>${escaparHtml(badge.texto)}</div></div></article>`;
+      <div class="product-main">
+        <div class="thumb" style="--fallback:${gradienteProducto(producto)}">${imagen}</div>
+        <div class="product-copy">
+          <div class="category">${escaparHtml(producto.categoria || 'Catalog')}</div>
+          <div class="product-name">${escaparHtml(producto.nombre)}</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="product-meta">
+        <div><div class="meta-label">Price</div><div class="price">${escaparHtml(dinero(producto.precio, producto.moneda))}</div></div>
+        <div class="stock-badge ${badge.clase}"><span class="badge-dot"></span>${escaparHtml(badge.texto)}</div>
+      </div>
+    </article>`;
 }
 
 function alturaPagina(cantidad) {
-    const filas = Math.max(1, Math.ceil(Math.max(1, cantidad) / 3));
-    return 54 + 174 + 30 + 104 + 30 + (filas * 224) + (Math.max(0, filas - 1) * 19) + 28 + 58 + 38;
+    const filas = Math.max(1, Math.ceil(Math.max(1, cantidad) / COLUMNAS));
+    return 48 + 164 + 26 + 92 + 26 + (filas * 210) + (Math.max(0, filas - 1) * 18) + 24 + 52 + 34;
 }
 
 function htmlPagina(productosPagina, contexto) {
@@ -161,8 +174,8 @@ function htmlPagina(productosPagina, contexto) {
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=${ANCHO},initial-scale=1"><style>
 ${font ? `@font-face{font-family:Market;src:url('${font}') format('truetype');font-weight:100 900;font-style:normal;font-display:block}` : ''}
 :root{--green:#1ed760;--text:#f6f8f7;--muted:#8b9890;--line:rgba(255,255,255,.085)}*{box-sizing:border-box}html,body{margin:0;padding:0;width:${ANCHO}px;height:${alto}px;overflow:hidden;background:#030504}body{font-family:Market,Inter,"Segoe UI",Arial,sans-serif;color:var(--text)}
-.stock-board{width:${ANCHO}px;height:${alto}px;position:relative;overflow:hidden;background:radial-gradient(circle at 90% 3%,rgba(30,215,96,.15),transparent 26%),radial-gradient(circle at 2% 90%,rgba(30,215,96,.07),transparent 28%),linear-gradient(145deg,#07100a 0%,#050806 42%,#080b09 100%)}.stock-board:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,rgba(255,255,255,.025),transparent 30%,transparent 72%,rgba(30,215,96,.025))}.inner{position:relative;padding:54px 58px 38px}.header{display:flex;justify-content:space-between;align-items:flex-start;gap:42px}.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:9px 15px;border-radius:999px;border:1px solid rgba(30,215,96,.3);background:rgba(30,215,96,.11);color:#7cf5a8;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.eyebrow-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(30,215,96,.75)}h1{font-size:62px;line-height:.98;letter-spacing:-.045em;margin:18px 0 12px;font-weight:900}.green{color:var(--green)}.subtitle{font-size:20px;line-height:1.45;color:#a4afa8;max-width:860px}.brand{display:flex;align-items:center;gap:17px;padding:15px 19px;border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.025);min-width:290px}.brand-logo{width:68px;height:68px;border-radius:20px;object-fit:contain;background:rgba(30,215,96,.08);padding:6px}.brand-fallback{width:68px;height:68px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,#2be873,#0a8f3d);color:#041108;font-weight:950;font-size:34px}.brand small{display:block;color:#728078;font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase;margin-bottom:5px}.brand strong{font-size:25px;letter-spacing:-.025em}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:31px 0 30px}.stat{border:1px solid var(--line);background:rgba(255,255,255,.028);border-radius:20px;padding:20px 22px}.stat-value{font-size:32px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-bottom:8px}.stat-label{font-size:11px;color:#758279;letter-spacing:.16em;text-transform:uppercase;font-weight:750}.products{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px}.product-card{min-height:224px;border-radius:24px;padding:19px;border:1px solid var(--line);background:radial-gradient(circle at 100% 0,rgba(30,215,96,.07),transparent 34%),linear-gradient(180deg,rgba(15,20,17,.97),rgba(9,13,10,.98));box-shadow:0 18px 35px rgba(0,0,0,.22)}.product-main{display:grid;grid-template-columns:90px 1fr;gap:16px;align-items:start}.thumb{width:90px;height:90px;border-radius:20px;overflow:hidden;display:grid;place-items:center;background:var(--fallback);border:1px solid rgba(255,255,255,.09);font-size:25px;font-weight:900}.thumb img{width:100%;height:100%;object-fit:cover}.thumb img.fallback-logo{object-fit:contain;padding:12px;background:#090d0a}.category{color:#7f8c84;font-size:11px;line-height:1.2;font-weight:750;letter-spacing:.14em;text-transform:uppercase;margin:5px 0 9px}.product-name{font-size:21px;line-height:1.12;letter-spacing:-.025em;font-weight:850;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.divider{height:1px;background:var(--line);margin:17px 0 15px}.product-meta{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.meta-label{color:#748178;font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px}.price{font-size:24px;font-weight:900;letter-spacing:-.035em}.stock-badge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:10px 13px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.badge-dot{width:7px;height:7px;border-radius:50%;background:currentColor}.stock-badge.normal{color:#6ff19d;background:rgba(30,215,96,.11);border:1px solid rgba(30,215,96,.27)}.stock-badge.low{color:#ffc370;background:rgba(255,173,77,.10);border:1px solid rgba(255,173,77,.28)}.stock-badge.unlimited{color:#d9e0dc;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.13)}.empty{grid-column:1/-1;min-height:224px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:26px;background:rgba(255,255,255,.025);gap:10px}.empty strong{font-size:30px}.empty span{font-size:17px;color:var(--muted)}.footer{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-top:28px;padding-top:20px;border-top:1px solid var(--line);color:#89958d;font-size:13px}.footer strong{color:#e7ece9}.live{display:flex;align-items:center;gap:10px}.live-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(30,215,96,.11)}.page{color:#70e99b;font-weight:750}
-</style></head><body><section class="stock-board"><div class="inner"><header class="header"><div><div class="eyebrow"><span class="eyebrow-dot"></span>Live catalog</div><h1><span class="green">LIVE</span> STOCK</h1><div class="subtitle">${escaparHtml(subtitle || 'Current availability synchronized automatically from SellAuth.')}</div></div><div class="brand">${logo ? `<img class="brand-logo" src="${logo}" alt="">` : `<div class="brand-fallback">SM</div>`}<div><small>Spotify Market</small><strong>${escaparHtml(title || 'Stock board')}</strong></div></div></header><div class="stats"><div class="stat"><div class="stat-value">${todos.length}</div><div class="stat-label">Products live</div></div><div class="stat"><div class="stat-value">${infinitos ? `${unidades}+` : unidades}</div><div class="stat-label">Units ready</div></div><div class="stat"><div class="stat-value">${categorias}</div><div class="stat-label">Categories</div></div></div><main class="products">${cards}</main><footer class="footer"><div><strong>Spotify Market</strong> / SellAuth live stock board</div><div class="live"><span class="live-dot"></span><span class="page">${paginaTexto}</span><span>·</span><span>${escaparHtml(actualizado)}</span></div></footer></div></section></body></html>`;
+.stock-board{width:${ANCHO}px;height:${alto}px;position:relative;overflow:hidden;background:radial-gradient(circle at 92% 0,rgba(30,215,96,.17),transparent 24%),radial-gradient(circle at 3% 100%,rgba(30,215,96,.07),transparent 26%),linear-gradient(145deg,#07100a 0%,#050806 43%,#080b09 100%)}.stock-board:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,rgba(255,255,255,.025),transparent 27%,transparent 75%,rgba(30,215,96,.028))}.inner{position:relative;padding:48px 64px 34px}.header{display:flex;justify-content:space-between;align-items:flex-start;gap:60px}.header-copy{max-width:1180px}.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:9px 15px;border-radius:999px;border:1px solid rgba(30,215,96,.3);background:rgba(30,215,96,.11);color:#7cf5a8;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.eyebrow-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(30,215,96,.75)}h1{font-size:66px;line-height:.96;letter-spacing:-.048em;margin:17px 0 11px;font-weight:900}.green{color:var(--green)}.subtitle{font-size:19px;line-height:1.42;color:#a4afa8;max-width:1100px}.brand{display:flex;align-items:center;gap:16px;padding:14px 18px;border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.025);min-width:320px}.brand-logo{width:64px;height:64px;border-radius:19px;object-fit:contain;background:rgba(30,215,96,.08);padding:6px}.brand-fallback{width:64px;height:64px;border-radius:19px;display:grid;place-items:center;background:linear-gradient(135deg,#2be873,#0a8f3d);color:#041108;font-weight:950;font-size:32px}.brand small{display:block;color:#728078;font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase;margin-bottom:5px}.brand strong{font-size:24px;letter-spacing:-.025em}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:26px 0}.stat{border:1px solid var(--line);background:rgba(255,255,255,.028);border-radius:18px;padding:17px 20px}.stat-value{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-bottom:7px}.stat-label{font-size:10px;color:#758279;letter-spacing:.16em;text-transform:uppercase;font-weight:750}.products{display:grid;grid-template-columns:repeat(${COLUMNAS},minmax(0,1fr));gap:18px}.product-card{min-height:210px;border-radius:22px;padding:17px;border:1px solid var(--line);background:radial-gradient(circle at 100% 0,rgba(30,215,96,.075),transparent 34%),linear-gradient(180deg,rgba(15,20,17,.97),rgba(9,13,10,.98));box-shadow:0 17px 32px rgba(0,0,0,.22)}.product-main{display:grid;grid-template-columns:78px 1fr;gap:14px;align-items:start}.thumb{width:78px;height:78px;border-radius:18px;overflow:hidden;display:grid;place-items:center;background:var(--fallback);border:1px solid rgba(255,255,255,.09);font-size:23px;font-weight:900}.thumb img{width:100%;height:100%;object-fit:cover}.thumb img.fallback-logo{object-fit:contain;padding:10px;background:#090d0a}.category{color:#7f8c84;font-size:10px;line-height:1.2;font-weight:750;letter-spacing:.13em;text-transform:uppercase;margin:5px 0 8px}.product-name{font-size:19px;line-height:1.12;letter-spacing:-.025em;font-weight:850;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.divider{height:1px;background:var(--line);margin:15px 0 14px}.product-meta{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}.meta-label{color:#748178;font-size:9px;font-weight:750;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}.price{font-size:22px;font-weight:900;letter-spacing:-.035em}.stock-badge{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:9px 11px;font-size:10px;font-weight:800;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}.badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor}.stock-badge.normal{color:#6ff19d;background:rgba(30,215,96,.11);border:1px solid rgba(30,215,96,.27)}.stock-badge.low{color:#ffc370;background:rgba(255,173,77,.10);border:1px solid rgba(255,173,77,.28)}.stock-badge.unlimited{color:#d9e0dc;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.13)}.empty{grid-column:1/-1;min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:24px;background:rgba(255,255,255,.025);gap:10px}.empty strong{font-size:30px}.empty span{font-size:17px;color:var(--muted)}.footer{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);color:#89958d;font-size:13px}.footer strong{color:#e7ece9}.live{display:flex;align-items:center;gap:10px}.live-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(30,215,96,.11)}.page{color:#70e99b;font-weight:750}
+</style></head><body><section class="stock-board"><div class="inner"><header class="header"><div class="header-copy"><div class="eyebrow"><span class="eyebrow-dot"></span>Live catalog</div><h1><span class="green">LIVE</span> STOCK</h1><div class="subtitle">${escaparHtml(subtitle || 'Current availability synchronized automatically from SellAuth.')}</div></div><div class="brand">${logo ? `<img class="brand-logo" src="${logo}" alt="">` : `<div class="brand-fallback">SM</div>`}<div><small>Spotify Market</small><strong>${escaparHtml(title || 'Stock board')}</strong></div></div></header><div class="stats"><div class="stat"><div class="stat-value">${todos.length}</div><div class="stat-label">Products live</div></div><div class="stat"><div class="stat-value">${infinitos ? `${unidades}+` : unidades}</div><div class="stat-label">Units ready</div></div><div class="stat"><div class="stat-value">${categorias}</div><div class="stat-label">Categories</div></div></div><main class="products">${cards}</main><footer class="footer"><div><strong>Spotify Market</strong> / SellAuth live stock board</div><div class="live"><span class="live-dot"></span><span class="page">${paginaTexto}</span><span>·</span><span>${escaparHtml(actualizado)}</span></div></footer></div></section></body></html>`;
 }
 
 function esEjecutable(ruta) {
@@ -237,7 +250,9 @@ class CdpClient {
         });
     }
 
-    close() { try { this.ws.close(); } catch { /* Ya cerrado. */ } }
+    close() {
+        try { this.ws.close(); } catch { /* Ya cerrado. */ }
+    }
 }
 
 async function iniciarBrowser() {
@@ -296,9 +311,14 @@ async function renderizar(html, alto) {
         await cdp.send('Page.setDocumentContent', { frameId: frameTree.frame.id, html }, sessionId);
         await cdp.send('Runtime.evaluate', {
             expression: `Promise.resolve(document.fonts?.ready).then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`,
-            awaitPromise: true, returnByValue: true
+            awaitPromise: true,
+            returnByValue: true
         }, sessionId);
-        const captura = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }, sessionId);
+        const captura = await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: false
+        }, sessionId);
         const buffer = Buffer.from(captura.data, 'base64');
         if (buffer.length < 10000) throw new Error('Chromium genero una captura demasiado pequena.');
         return buffer;
@@ -314,32 +334,49 @@ function dividir(lista, tamano) {
 }
 
 function nombreArchivoStock(pagina = 1, total = 1) {
-    return total > 1 ? `spotify-market-live-stock-${String(pagina).padStart(2, '0')}.png` : 'spotify-market-live-stock.png';
+    return total > 1
+        ? `spotify-market-live-stock-${String(pagina).padStart(2, '0')}.png`
+        : 'spotify-market-live-stock.png';
 }
 
 async function generarPanelesStock(productos, opciones = {}) {
-    const disponibles = productos.filter(producto => producto?.visible && Number(producto.stock) !== 0)
+    const disponibles = productos
+        .filter(producto => producto?.visible && Number(producto.stock) !== 0)
         .sort((a, b) => String(a.categoria || '').localeCompare(String(b.categoria || '')) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
+
     const porPagina = Math.min(Math.max(Number(opciones.productsPerPage) || PRODUCTOS_POR_PAGINA, 6), 12);
     const maxPaginas = Math.min(Math.max(Number(opciones.maxPages) || 3, 1), MAX_PAGINAS_DISCORD);
     const limite = porPagina * maxPaginas;
     const visibles = disponibles.slice(0, limite);
-    if (disponibles.length > limite) logger.warn('sellauth:stock-html', `${disponibles.length - limite} productos no caben en las ${maxPaginas} paginas configuradas.`);
+    if (disponibles.length > limite) {
+        logger.warn('sellauth:stock-html', `${disponibles.length - limite} productos no caben en las ${maxPaginas} paginas configuradas.`);
+    }
+
     const [recursos, hidratados] = await Promise.all([recursosLocales(), hidratarImagenes(visibles)]);
     const paginas = dividir(hidratados, porPagina);
     const updatedAt = Number(opciones.updatedAt) || Date.now();
     const totalPaginas = paginas.length;
     const resultados = [];
+
     for (let i = 0; i < paginas.length; i += 1) {
         const html = htmlPagina(paginas[i], {
-            todos: hidratados, pagina: i + 1, totalPaginas,
+            todos: hidratados,
+            pagina: i + 1,
+            totalPaginas,
             title: opciones.title || 'Stock board',
             subtitle: opciones.subtitle || 'Current availability synchronized automatically from SellAuth.',
             lowStockThreshold: Number.isFinite(Number(opciones.lowStockThreshold)) ? Number(opciones.lowStockThreshold) : 3,
-            updatedAt, ...recursos
+            updatedAt,
+            ...recursos
         });
-        resultados.push({ pagina: i + 1, totalPaginas, nombre: nombreArchivoStock(i + 1, totalPaginas), buffer: await renderizar(html, alturaPagina(paginas[i].length)) });
+        resultados.push({
+            pagina: i + 1,
+            totalPaginas,
+            nombre: nombreArchivoStock(i + 1, totalPaginas),
+            buffer: await renderizar(html, alturaPagina(paginas[i].length))
+        });
     }
+
     return resultados;
 }
 
@@ -360,4 +397,12 @@ function diagnostico() {
     return { renderer: RENDERER_VERSION, chromiumPath: chromium || '', available: Boolean(chromium) };
 }
 
-module.exports = { ANCHO, PRODUCTOS_POR_PAGINA, RENDERER_VERSION, generarPanelesStock, nombreArchivoStock, diagnostico, cerrar };
+module.exports = {
+    ANCHO,
+    PRODUCTOS_POR_PAGINA,
+    RENDERER_VERSION,
+    generarPanelesStock,
+    nombreArchivoStock,
+    diagnostico,
+    cerrar
+};
