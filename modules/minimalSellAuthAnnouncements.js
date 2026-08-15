@@ -19,6 +19,7 @@ const STOCK_SCHEMA = {
     messageId: '',
     fingerprint: '',
     updatedAt: 0,
+    pageCount: 0,
     lastError: ''
 };
 
@@ -34,6 +35,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
     }
 
     fingerprintStock(productos = this.productosConStock()) {
+        const ajustes = this.config.stockPanel ?? {};
         const estable = productos
             .map(producto => ({
                 id: producto.id,
@@ -46,7 +48,18 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
                 visible: producto.visible
             }))
             .sort((a, b) => a.id.localeCompare(b.id));
-        return crypto.createHash('sha256').update(JSON.stringify(estable)).digest('hex');
+        return crypto.createHash('sha256').update(JSON.stringify({
+            productos: estable,
+            panel: {
+                title: ajustes.title,
+                description: ajustes.description,
+                imageTitle: ajustes.imageTitle,
+                imageSubtitle: ajustes.imageSubtitle,
+                lowStockThreshold: ajustes.lowStockThreshold,
+                productsPerPage: ajustes.productsPerPage,
+                maxPages: ajustes.maxPages
+            }
+        })).digest('hex');
     }
 
     async sincronizarProductos(opciones = {}) {
@@ -57,6 +70,11 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             logger.error('sellauth:stock', `No se pudo actualizar el panel: ${error.message}`);
         });
         return resultado;
+    }
+
+    detener() {
+        stockArte.cerrar?.().catch(() => null);
+        return super.detener();
     }
 
     async canalStock(canalPreferido = null) {
@@ -73,12 +91,13 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         return canal.messages.fetch(estado.messageId).catch(() => null);
     }
 
-    construirStockContainer(nombreArchivo, productos, actualizadoEn) {
+    construirStockContainer(nombresArchivos, productos, actualizadoEn) {
         const stockFinito = productos.filter(producto => producto.stock > 0)
             .reduce((total, producto) => total + Number(producto.stock), 0);
         const infinitos = productos.filter(producto => producto.stock < 0).length;
         const resumenUnidades = infinitos ? `${stockFinito}+` : String(stockFinito);
         const ajustes = this.config.stockPanel ?? {};
+        const totalPaginas = nombresArchivos.length;
 
         return new ContainerBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
@@ -87,14 +106,14 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             ))
             .addSeparatorComponents(ui.linea())
             .addMediaGalleryComponents(ui.galeria(
-                [`attachment://${nombreArchivo}`],
+                nombresArchivos.map(nombre => `attachment://${nombre}`),
                 'Spotify Market live product stock'
             ))
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 `${this.emojis.rol('producto')} **Available products:** ${ui.dato(productos.length)} · ` +
                 `${this.emojis.rol('stock')} **Ready units:** ${ui.dato(resumenUnidades)}\n` +
-                `-# Auto-updated from SellAuth · ${ui.fecha(actualizadoEn, 'R')}`
+                `-# HTML stock board · ${totalPaginas} image${totalPaginas === 1 ? '' : 's'} · Auto-updated from SellAuth · ${ui.fecha(actualizadoEn, 'R')}`
             ));
     }
 
@@ -112,17 +131,19 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             if (!forzar && mensaje && fingerprint === this.stockDb.data.fingerprint) return mensaje;
 
             const actualizadoEn = Date.now();
-            const buffer = await stockArte.generarPanelStock(productos, {
-                title: ajustes.imageTitle || 'PRODUCT STOCK',
-                subtitle: ajustes.imageSubtitle || 'Available products, synced automatically from SellAuth.',
+            const paneles = await stockArte.generarPanelesStock(productos, {
+                title: ajustes.imageTitle || 'Stock board',
+                subtitle: ajustes.imageSubtitle || 'Current availability synchronized automatically from SellAuth.',
                 lowStockThreshold: ajustes.lowStockThreshold,
+                productsPerPage: ajustes.productsPerPage,
+                maxPages: ajustes.maxPages,
                 updatedAt: actualizadoEn
             });
-            const nombre = stockArte.nombreArchivoStock();
-            const archivo = new AttachmentBuilder(buffer, { name: nombre });
+            const nombres = paneles.map(panel => panel.nombre);
+            const archivos = paneles.map(panel => new AttachmentBuilder(panel.buffer, { name: panel.nombre }));
             const payload = {
-                components: [this.construirStockContainer(nombre, productos, actualizadoEn)],
-                files: [archivo],
+                components: [this.construirStockContainer(nombres, productos, actualizadoEn)],
+                files: archivos,
                 flags: ui.V2,
                 allowedMentions: { parse: [] }
             };
@@ -145,9 +166,10 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             this.stockDb.data.messageId = mensaje.id;
             this.stockDb.data.fingerprint = fingerprint;
             this.stockDb.data.updatedAt = actualizadoEn;
+            this.stockDb.data.pageCount = paneles.length;
             this.stockDb.data.lastError = '';
             this.stockDb.flush();
-            logger.detalle(`Panel de stock actualizado: ${productos.length} productos en #${destino.id}`);
+            logger.detalle(`Panel HTML de stock actualizado: ${productos.length} productos · ${paneles.length} imagen(es) · #${destino.id}`);
             return mensaje;
         };
 
@@ -197,12 +219,12 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         }
 
         const bajada = tipo === 'price' && Number(producto.precio) < Number(anterior);
-        const ajustes = tipo === 'price'
+        const ajustesAviso = tipo === 'price'
             ? this.config.announcements.priceChanges
             : this.config.announcements.restocks;
         const titulo = tipo === 'price'
-            ? (bajada ? ajustes.titleDrop : ajustes.titleIncrease)
-            : ajustes.title;
+            ? (bajada ? ajustesAviso.titleDrop : ajustesAviso.titleIncrease)
+            : ajustesAviso.title;
 
         const buffer = await arte.generarAviso({
             tipo: tipo === 'price' ? 'price' : 'restock',
