@@ -49,6 +49,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             }))
             .sort((a, b) => a.id.localeCompare(b.id));
         return crypto.createHash('sha256').update(JSON.stringify({
+            renderer: stockArte.RENDERER_VERSION,
             productos: estable,
             panel: {
                 title: ajustes.title,
@@ -113,7 +114,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 `${this.emojis.rol('producto')} **Available products:** ${ui.dato(productos.length)} · ` +
                 `${this.emojis.rol('stock')} **Ready units:** ${ui.dato(resumenUnidades)}\n` +
-                `-# HTML stock board · ${totalPaginas} image${totalPaginas === 1 ? '' : 's'} · Auto-updated from SellAuth · ${ui.fecha(actualizadoEn, 'R')}`
+                `-# HTML/Chromium stock board · ${totalPaginas} image${totalPaginas === 1 ? '' : 's'} · Auto-updated from SellAuth · ${ui.fecha(actualizadoEn, 'R')}`
             ));
     }
 
@@ -169,7 +170,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             this.stockDb.data.pageCount = paneles.length;
             this.stockDb.data.lastError = '';
             this.stockDb.flush();
-            logger.detalle(`Panel HTML de stock actualizado: ${productos.length} productos · ${paneles.length} imagen(es) · #${destino.id}`);
+            logger.detalle(`Panel HTML/Chromium de stock actualizado: ${productos.length} productos · ${paneles.length} imagen(es) · #${destino.id}`);
             return mensaje;
         };
 
