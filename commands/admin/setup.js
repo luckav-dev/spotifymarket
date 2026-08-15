@@ -15,6 +15,7 @@ const DESTINOS = {
     'sellauth-reviews': ['sellauth', 'channels.reviews', 'SellAuth reviews'],
     'sellauth-restocks': ['sellauth', 'channels.restocks', 'SellAuth restocks'],
     'sellauth-prices': ['sellauth', 'channels.priceUpdates', 'SellAuth price updates'],
+    'sellauth-payments': ['sellauth', 'channels.payments', 'SellAuth payment notifications'],
     'logs-tickets': ['logs', 'canales.tickets', 'Ticket logs'],
     'logs-mensajes': ['logs', 'canales.mensajes', 'Message logs'],
     'logs-moderacion': ['logs', 'canales.moderacion', 'Moderation logs'],
@@ -81,7 +82,7 @@ module.exports = {
             .setDescription('Assign a role to a bot function')
             .addStringOption(o => o
                 .setName('function')
-                .setDescription('Function that will use the role')
+                .setDescription('Role to assign')
                 .setRequired(true)
                 .addChoices(...opciones(ROLES)))
             .addRoleOption(o => o
