@@ -7,7 +7,8 @@
   "channels": {
     "reviews": "1416774394415677461",
     "restocks": "1416774394092458105",
-    "priceUpdates": "1536490079009382501"
+    "priceUpdates": "1536490079009382501",
+    "stock": ""
   },
   "sync": {
     "intervalMs": 90000,
@@ -22,6 +23,14 @@
     "port": 8790,
     "path": "/webhooks/sellauth",
     "timestampToleranceSeconds": 300
+  },
+  "stockPanel": {
+    "enabled": true,
+    "title": "LIVE STOCK",
+    "description": "Current availability, synchronized automatically with SellAuth.",
+    "imageTitle": "PRODUCT STOCK",
+    "imageSubtitle": "Available products, synced automatically from SellAuth.",
+    "lowStockThreshold": 3
   },
   "reviews": {
     "title": "Verified Customer Review",
