@@ -28,9 +28,11 @@
     "enabled": true,
     "title": "LIVE STOCK",
     "description": "Current availability, synchronized automatically with SellAuth.",
-    "imageTitle": "PRODUCT STOCK",
-    "imageSubtitle": "Available products, synced automatically from SellAuth.",
-    "lowStockThreshold": 3
+    "imageTitle": "Stock board",
+    "imageSubtitle": "Current availability synchronized automatically from SellAuth.",
+    "lowStockThreshold": 3,
+    "productsPerPage": 12,
+    "maxPages": 3
   },
   "reviews": {
     "title": "Verified Customer Review",
