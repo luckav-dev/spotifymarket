@@ -212,20 +212,25 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         });
         const nombre = arte.nombreArchivo(tipo, producto);
         const archivo = new AttachmentBuilder(buffer, { name: nombre });
+        const mencionarEveryone = tipo !== 'price';
 
-        const container = new ContainerBuilder()
-            .addTextDisplayComponents(
+        const container = new ContainerBuilder();
+        if (mencionarEveryone) {
+            container.addTextDisplayComponents(
                 new TextDisplayBuilder().setContent('@everyone')
-            )
-            .addMediaGalleryComponents(
-                ui.galeria([`attachment://${nombre}`])
             );
+        }
+        container.addMediaGalleryComponents(
+            ui.galeria([`attachment://${nombre}`])
+        );
 
         return canal.send({
             components: [container],
             files: [archivo],
             flags: ui.V2,
-            allowedMentions: { parse: ['everyone'] }
+            allowedMentions: mencionarEveryone
+                ? { parse: ['everyone'] }
+                : { parse: [] }
         });
     }
 }
