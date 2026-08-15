@@ -8,6 +8,7 @@
     "reviews": "1416774394415677461",
     "restocks": "1416774394092458105",
     "priceUpdates": "1536490079009382501",
+    "payments": "",
     "stock": ""
   },
   "sync": {
@@ -54,6 +55,13 @@
   },
   "announcements": {
     "mentionEveryone": true,
+    "payments": {
+      "enabled": true,
+      "title": "PAYMENT RECEIVED",
+      "description": "SellAuth confirmed the payment and processed the invoice.",
+      "showEmail": true,
+      "statuses": ["completed", "partially_completed"]
+    },
     "restocks": {
       "enabled": true,
       "title": "PRODUCT RESTOCKED",
