@@ -23,6 +23,75 @@ const STOCK_SCHEMA = {
     lastError: ''
 };
 
+function texto(valor, fallback = '—') {
+    const limpio = String(valor ?? '').replace(/\s+/g, ' ').trim();
+    return limpio || fallback;
+}
+
+function markdownSeguro(valor, fallback = '—') {
+    return texto(valor, fallback).replace(/([\\`*_~|>])/g, '\\$1');
+}
+
+function dinero(valor, moneda = 'EUR') {
+    const numero = Number(valor);
+    const codigo = texto(moneda, 'EUR').toUpperCase();
+    if (!Number.isFinite(numero)) return `${texto(valor, '0')} ${codigo}`;
+    return `${numero.toFixed(2)} ${codigo}`;
+}
+
+function discordIdFactura(factura) {
+    const candidatos = [
+        factura?.discord_id,
+        factura?.discord_user_id,
+        factura?.discord?.id,
+        factura?.customer?.discord_id,
+        factura?.customer?.discord_user_id,
+        factura?.shop_customer?.discord_id,
+        factura?.shop_customer?.discord_user_id
+    ];
+    return candidatos
+        .map(valor => String(valor ?? '').trim())
+        .find(valor => /^\d{17,20}$/.test(valor)) ?? '';
+}
+
+function discordNombreFactura(factura) {
+    return texto(
+        factura?.discord_user_username
+        || factura?.discord_username
+        || factura?.discord?.username
+        || factura?.customer?.discord_username
+        || factura?.shop_customer?.discord_username,
+        ''
+    );
+}
+
+function emailFactura(factura) {
+    return texto(
+        factura?.email
+        || factura?.customer?.email
+        || factura?.shop_customer?.email,
+        ''
+    );
+}
+
+function productosFactura(factura) {
+    const items = Array.isArray(factura?.items) ? factura.items : [];
+    if (!items.length) return ['• Purchase details unavailable'];
+
+    const lineas = items.slice(0, 8).map(item => {
+        const cantidad = Math.max(1, Math.trunc(Number(item?.quantity) || 1));
+        const producto = texto(item?.product?.name || item?.product_name, 'Product');
+        const variante = texto(item?.variant?.name || item?.variant_name, '');
+        const nombre = variante && variante !== producto
+            ? `${producto} — ${variante}`
+            : producto;
+        return `• **${cantidad}x** ${markdownSeguro(nombre)}`;
+    });
+
+    if (items.length > 8) lineas.push(`• +${items.length - 8} more item(s)`);
+    return lineas;
+}
+
 class MinimalSellAuthAnnouncements extends SellAuthSystem {
     constructor(client, emojis) {
         super(client, emojis);
@@ -84,6 +153,116 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         if (!id) return null;
         const canal = await this.client.channels.fetch(id).catch(() => null);
         return canal?.isTextBased?.() ? canal : null;
+    }
+
+    async canalPagos() {
+        const id = String(this.config.channels?.payments ?? '').trim();
+        if (!id) return null;
+
+        const canal = await this.client.channels.fetch(id).catch(() => null);
+        if (!canal?.isTextBased?.()) {
+            logger.warn('sellauth:payments', `El canal ${id} no existe o no admite mensajes.`);
+            return null;
+        }
+        return canal;
+    }
+
+    async publicarPago(factura) {
+        const ajustes = this.config.announcements?.payments ?? {};
+        if (ajustes.enabled === false) return null;
+
+        const canal = await this.canalPagos();
+        if (!canal) return null;
+
+        const estado = String(factura?.status ?? '').trim().toLowerCase();
+        const estadosPermitidos = Array.isArray(ajustes.statuses) && ajustes.statuses.length
+            ? ajustes.statuses.map(valor => String(valor).toLowerCase())
+            : ['completed', 'partially_completed'];
+        if (estado && !estadosPermitidos.includes(estado)) {
+            logger.detalle(`Pago SellAuth omitido: factura #${factura?.id ?? '?'} con estado ${estado}.`);
+            return null;
+        }
+
+        const discordId = discordIdFactura(factura);
+        const discordNombre = discordNombreFactura(factura);
+        const email = emailFactura(factura);
+        const mostrarEmail = ajustes.showEmail !== false;
+        const moneda = texto(factura?.currency, 'EUR').toUpperCase();
+        const metodo = texto(
+            factura?.payment_method?.name
+            || factura?.payment_method?.checkout_name
+            || factura?.gateway,
+            'Unknown'
+        );
+        const gateway = texto(factura?.gateway, '');
+        const facturaId = texto(factura?.id, '?');
+        const uniqueId = texto(factura?.unique_id, '');
+        const precioUsd = Number(factura?.price_usd);
+        const fecha = Date.parse(
+            factura?.completed_at
+            || factura?.updated_at
+            || factura?.created_at
+            || ''
+        );
+        const timestamp = Math.floor((Number.isFinite(fecha) ? fecha : Date.now()) / 1000);
+
+        let cliente = 'Not linked to Discord';
+        if (discordId) {
+            cliente = `<@${discordId}>`;
+            if (discordNombre) cliente += ` · **${markdownSeguro(discordNombre)}**`;
+            cliente += ` · \`${discordId}\``;
+        } else if (discordNombre) {
+            cliente = `**${markdownSeguro(discordNombre)}**`;
+        }
+
+        const metodoCompleto = gateway && gateway.toLowerCase() !== metodo.toLowerCase()
+            ? `${markdownSeguro(metodo)} · \`${markdownSeguro(gateway)}\``
+            : markdownSeguro(metodo);
+
+        const detallesCliente = [
+            `👤 **Discord:** ${cliente}`,
+            ...(mostrarEmail && email ? [`📧 **Email:** \`${email.replace(/`/g, '')}\``] : [])
+        ];
+
+        const detallesPago = [
+            `💳 **Method:** ${metodoCompleto}`,
+            `💰 **Amount:** \`${dinero(factura?.price, moneda)}\``,
+            ...(moneda !== 'USD' && Number.isFinite(precioUsd) && precioUsd > 0
+                ? [`💵 **USD value:** \`${dinero(precioUsd, 'USD')}\``]
+                : []),
+            `✅ **Status:** \`${markdownSeguro(estado || 'processed')}\``
+        ];
+
+        const detallesPedido = [
+            ...productosFactura(factura),
+            '',
+            `🧾 **Invoice:** \`#${facturaId}\``,
+            ...(uniqueId ? [`🔖 **Reference:** \`${uniqueId.replace(/`/g, '')}\``] : []),
+            `🕒 **Completed:** <t:${timestamp}:F> · <t:${timestamp}:R>`
+        ];
+
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `## 💸 ${ajustes.title || 'PAYMENT RECEIVED'}\n` +
+                `> ${ajustes.description || 'SellAuth confirmed the payment and processed the invoice.'}`
+            ))
+            .addSeparatorComponents(ui.linea())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(detallesCliente.join('\n')))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(detallesPago.join('\n')))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(detallesPedido.join('\n')));
+
+        const mensaje = await canal.send({
+            components: [container],
+            flags: ui.V2,
+            allowedMentions: discordId
+                ? { parse: [], users: [discordId] }
+                : { parse: [] }
+        });
+
+        logger.paso('sellauth:payments', `Pago anunciado: factura #${facturaId} · ${metodo} · ${dinero(factura?.price, moneda)}`);
+        return mensaje;
     }
 
     async mensajeStock(canal) {
@@ -192,6 +371,16 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
 
         if (eventosFactura.has(evento)) {
             await this.sincronizarProductos({ anunciar: true });
+
+            if (evento === 'NOTIFICATION.SHOP_INVOICE_PROCESSED') {
+                const invoiceId = String(payload?.data?.invoice_id ?? '').trim();
+                if (!invoiceId) {
+                    logger.warn('sellauth:payments', 'Webhook de factura procesada recibido sin invoice_id.');
+                } else {
+                    const factura = await this.api.obtenerFactura(invoiceId);
+                    await this.publicarPago(factura);
+                }
+            }
             return;
         }
 
