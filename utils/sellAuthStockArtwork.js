@@ -2,324 +2,357 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const crypto = require('node:crypto');
 
 const logger = require('./logger');
-const arte = require('./sellAuthArtwork');
 
 const RAIZ = path.resolve(__dirname, '..');
-const ANCHO = 1600;
 const FUENTE_RUTA = path.join(RAIZ, 'assets', 'fuentes', 'Montserrat-Variable.ttf');
-const FONDO_RUTA = path.join(RAIZ, 'assets', 'brand', 'banner.png');
 const LOGO_RUTA = path.join(RAIZ, 'assets', 'brand', 'SpotifyMarket.png');
+const ANCHO = 1600;
+const PRODUCTOS_POR_PAGINA = 12;
+const MAX_PAGINAS_DISCORD = 10;
+const MAX_IMAGEN_BYTES = 6 * 1024 * 1024;
 
-let fuenteRegistrada = false;
+let browserPromise = null;
+let recursosPromise = null;
 
-function prepararFuente() {
-    if (fuenteRegistrada) return;
-    fuenteRegistrada = true;
+function escaparHtml(valor) {
+    return String(valor ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function dinero(valor, moneda = 'EUR') {
     try {
-        if (fs.existsSync(FUENTE_RUTA)) GlobalFonts.registerFromPath(FUENTE_RUTA);
-    } catch (error) {
-        logger.warn('sellauth:stock-art', `No se pudo registrar Montserrat: ${error.message}`);
+        return new Intl.NumberFormat('en-GB', {
+            style: 'currency',
+            currency: String(moneda || 'EUR').toUpperCase(),
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Number(valor || 0));
+    } catch {
+        return `${Number(valor || 0).toFixed(2)} ${String(moneda || 'EUR').toUpperCase()}`;
     }
 }
 
-function fuente(peso, tamano) {
-    prepararFuente();
-    return `${peso} ${tamano}px "Montserrat", "Segoe UI", sans-serif`;
+function aDataUrl(buffer, mime) {
+    if (!buffer) return '';
+    return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
-async function cargarImagen(origen) {
-    if (!origen) return null;
+function dataUrlLocal(ruta, mime) {
     try {
-        if (/^https:\/\//i.test(origen)) {
-            const controlador = new AbortController();
-            const timeout = setTimeout(() => controlador.abort(), 7000);
-            timeout.unref?.();
-            const respuesta = await fetch(origen, { signal: controlador.signal });
-            clearTimeout(timeout);
-            if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-            return loadImage(Buffer.from(await respuesta.arrayBuffer()));
-        }
-        return loadImage(origen);
+        if (!fs.existsSync(ruta)) return '';
+        return aDataUrl(fs.readFileSync(ruta), mime);
     } catch (error) {
-        logger.warn('sellauth:stock-art', `No se pudo cargar '${origen}': ${error.message}`);
-        return null;
+        logger.warn('sellauth:stock-html', `No se pudo leer ${path.basename(ruta)}: ${error.message}`);
+        return '';
     }
 }
 
-function cubrir(ctx, imagen, x, y, ancho, alto) {
-    const escala = Math.max(ancho / imagen.width, alto / imagen.height);
-    const w = imagen.width * escala;
-    const h = imagen.height * escala;
-    ctx.drawImage(imagen, x + (ancho - w) / 2, y + (alto - h) / 2, w, h);
-}
-
-function contener(ctx, imagen, x, y, ancho, alto) {
-    const escala = Math.min(ancho / imagen.width, alto / imagen.height);
-    const w = imagen.width * escala;
-    const h = imagen.height * escala;
-    ctx.drawImage(imagen, x + (ancho - w) / 2, y + (alto - h) / 2, w, h);
-}
-
-function rect(ctx, x, y, ancho, alto, radio, color) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, ancho, alto, radio);
-    ctx.fillStyle = color;
-    ctx.fill();
-}
-
-function lineas(ctx, texto, maxAncho, maxLineas = 2) {
-    const palabras = String(texto ?? '').trim().split(/\s+/).filter(Boolean);
-    const salida = [];
-    let actual = '';
-    for (const palabra of palabras) {
-        const candidata = actual ? `${actual} ${palabra}` : palabra;
-        if (ctx.measureText(candidata).width <= maxAncho) {
-            actual = candidata;
-            continue;
-        }
-        if (actual) salida.push(actual);
-        actual = palabra;
-        if (salida.length === maxLineas - 1) break;
+function recursosLocales() {
+    if (!recursosPromise) {
+        recursosPromise = Promise.resolve({
+            font: dataUrlLocal(FUENTE_RUTA, 'font/ttf'),
+            logo: dataUrlLocal(LOGO_RUTA, 'image/png')
+        });
     }
-    if (actual && salida.length < maxLineas) salida.push(actual);
-    if (salida.join(' ').length < String(texto).trim().length && salida.length) {
-        let ultima = salida.at(-1);
-        while (ultima.length > 1 && ctx.measureText(`${ultima}...`).width > maxAncho) ultima = ultima.slice(0, -1);
-        salida[salida.length - 1] = `${ultima.trim()}...`;
+    return recursosPromise;
+}
+
+async function descargarImagen(url) {
+    if (!/^https:\/\//i.test(String(url || ''))) return '';
+    const controlador = new AbortController();
+    const timeout = setTimeout(() => controlador.abort(), 7000);
+    timeout.unref?.();
+    try {
+        const respuesta = await fetch(url, {
+            signal: controlador.signal,
+            headers: { 'User-Agent': 'SpotifyMarketStockBoard/1.0' }
+        });
+        if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+        const tipo = String(respuesta.headers.get('content-type') || 'image/png').split(';')[0];
+        if (!tipo.startsWith('image/')) throw new Error(`tipo ${tipo}`);
+        const declarado = Number(respuesta.headers.get('content-length') || 0);
+        if (declarado > MAX_IMAGEN_BYTES) throw new Error('imagen demasiado grande');
+        const buffer = Buffer.from(await respuesta.arrayBuffer());
+        if (buffer.length > MAX_IMAGEN_BYTES) throw new Error('imagen demasiado grande');
+        return aDataUrl(buffer, tipo);
+    } catch (error) {
+        logger.detalle(`Miniatura omitida (${String(url).slice(0, 80)}): ${error.message}`);
+        return '';
+    } finally {
+        clearTimeout(timeout);
     }
-    return salida;
 }
 
-function etiqueta(ctx, texto, x, y) {
-    ctx.font = fuente(850, 20);
-    ctx.letterSpacing = '1.8px';
-    const ancho = ctx.measureText(texto).width + 38;
-    rect(ctx, x, y, ancho, 44, 22, '#1ed760');
-    ctx.fillStyle = '#061009';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(texto, x + ancho / 2, y + 23);
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.letterSpacing = '0px';
-}
-
-function stat(ctx, x, y, titulo, valor) {
-    rect(ctx, x, y, 205, 76, 20, 'rgba(255,255,255,.05)');
-    ctx.strokeStyle = 'rgba(255,255,255,.085)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(x, y, 205, 76, 20);
-    ctx.stroke();
-    ctx.font = fuente(850, 28);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(String(valor), x + 17, y + 32);
-    ctx.font = fuente(650, 12);
-    ctx.fillStyle = '#85948a';
-    ctx.letterSpacing = '1px';
-    ctx.fillText(titulo.toUpperCase(), x + 17, y + 57);
-    ctx.letterSpacing = '0px';
-}
-
-function badgeStock(ctx, xDerecha, y, producto, umbralBajo) {
-    const infinito = producto.stock < 0;
-    const bajo = !infinito && producto.stock <= umbralBajo;
-    const texto = infinito ? 'IN STOCK · ∞' : `${producto.stock} IN STOCK`;
-    const color = bajo ? '#ffb454' : '#1ed760';
-    const fondo = bajo ? 'rgba(255,180,84,.13)' : 'rgba(30,215,96,.12)';
-    ctx.font = fuente(850, 13);
-    ctx.letterSpacing = '.7px';
-    const ancho = Math.max(108, ctx.measureText(texto).width + 28);
-    rect(ctx, xDerecha - ancho, y, ancho, 34, 17, fondo);
-    ctx.strokeStyle = bajo ? 'rgba(255,180,84,.35)' : 'rgba(30,215,96,.32)';
-    ctx.beginPath();
-    ctx.roundRect(xDerecha - ancho, y, ancho, 34, 17);
-    ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(texto, xDerecha - ancho / 2, y + 18);
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.letterSpacing = '0px';
-}
-
-async function cargarMiniaturas(productos, limite = 8) {
-    const resultado = new Array(productos.length).fill(null);
-    let indice = 0;
-    const workers = Array.from({ length: Math.min(limite, productos.length) }, async () => {
-        while (indice < productos.length) {
-            const actual = indice++;
-            resultado[actual] = await cargarImagen(productos[actual].imagen);
+async function hidratarImagenes(productos, concurrencia = 6) {
+    const salida = productos.map(producto => ({ ...producto, imagenData: '' }));
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(concurrencia, Math.max(1, salida.length)) }, async () => {
+        while (cursor < salida.length) {
+            const indice = cursor++;
+            salida[indice].imagenData = await descargarImagen(salida[indice].imagen);
         }
     });
     await Promise.all(workers);
-    return resultado;
+    return salida;
 }
 
-async function generarPanelStock(productos, opciones = {}) {
+function iniciales(nombre) {
+    return String(nombre || 'SM')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(parte => parte[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2) || 'SM';
+}
+
+function gradienteProducto(producto) {
+    const hash = crypto.createHash('sha1').update(String(producto.id || producto.nombre || '')).digest();
+    const h1 = (hash[0] * 360) / 255;
+    const h2 = (h1 + 35 + (hash[1] % 70)) % 360;
+    return `linear-gradient(135deg, hsl(${h1.toFixed(0)} 62% 40%), hsl(${h2.toFixed(0)} 72% 24%))`;
+}
+
+function stockBadge(producto, umbral) {
+    const stock = Number(producto.stock);
+    if (stock < 0) return { clase: 'unlimited', texto: 'Unlimited' };
+    if (stock <= umbral) return { clase: 'low', texto: `${stock} left` };
+    return { clase: 'normal', texto: `${stock} in stock` };
+}
+
+function tarjeta(producto, umbral, logo) {
+    const badge = stockBadge(producto, umbral);
+    const fondo = gradienteProducto(producto);
+    const imagen = producto.imagenData
+        ? `<img src="${producto.imagenData}" alt="" />`
+        : logo
+            ? `<img class="fallback-logo" src="${logo}" alt="" />`
+            : `<span>${escaparHtml(iniciales(producto.nombre))}</span>`;
+
+    return `
+      <article class="product-card">
+        <div class="product-main">
+          <div class="thumb" style="--fallback:${fondo}">${imagen}</div>
+          <div class="product-copy">
+            <div class="category">${escaparHtml(producto.categoria || 'Catalog')}</div>
+            <div class="product-name">${escaparHtml(producto.nombre)}</div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="product-meta">
+          <div>
+            <div class="meta-label">Price</div>
+            <div class="price">${escaparHtml(dinero(producto.precio, producto.moneda))}</div>
+          </div>
+          <div class="stock-badge ${badge.clase}"><span class="badge-dot"></span>${escaparHtml(badge.texto)}</div>
+        </div>
+      </article>`;
+}
+
+function htmlPagina(productosPagina, contexto) {
+    const {
+        todos,
+        pagina,
+        totalPaginas,
+        title,
+        subtitle,
+        lowStockThreshold,
+        updatedAt,
+        font,
+        logo
+    } = contexto;
+
+    const unidades = todos.filter(p => Number(p.stock) > 0).reduce((total, p) => total + Number(p.stock), 0);
+    const infinitos = todos.some(p => Number(p.stock) < 0);
+    const categorias = new Set(todos.map(p => String(p.categoria || '').trim()).filter(Boolean)).size;
+    const cards = productosPagina.length
+        ? productosPagina.map(p => tarjeta(p, lowStockThreshold, logo)).join('')
+        : `<div class="empty"><strong>Stock is being prepared</strong><span>New availability will appear here automatically.</span></div>`;
+    const paginaTexto = totalPaginas > 1 ? `Page ${pagina} / ${totalPaginas}` : 'Live inventory';
+    const actualizado = new Date(updatedAt).toLocaleString('en-GB', {
+        timeZone: 'Europe/Madrid',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+${font ? `@font-face{font-family:Market;src:url('${font}') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}` : ''}
+:root{--green:#1ed760;--green2:#17b956;--text:#f6f8f7;--muted:#8b9890;--line:rgba(255,255,255,.085);--panel:rgba(13,18,15,.94);--orange:#ffad4d}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#030504}body{font-family:Market,Inter,"Segoe UI",Arial,sans-serif;color:var(--text);padding:34px}
+.stock-board{width:${ANCHO}px;margin:0 auto;position:relative;overflow:hidden;border:1px solid rgba(30,215,96,.26);border-radius:34px;background:radial-gradient(circle at 90% 3%,rgba(30,215,96,.15),transparent 26%),radial-gradient(circle at 2% 90%,rgba(30,215,96,.07),transparent 28%),linear-gradient(145deg,#07100a 0%,#050806 42%,#080b09 100%);box-shadow:0 40px 100px rgba(0,0,0,.5)}
+.stock-board:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,rgba(255,255,255,.025),transparent 30%,transparent 72%,rgba(30,215,96,.025));}
+.inner{position:relative;padding:54px 58px 38px}.header{display:flex;justify-content:space-between;align-items:flex-start;gap:42px}.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:9px 15px;border-radius:999px;border:1px solid rgba(30,215,96,.3);background:rgba(30,215,96,.11);color:#7cf5a8;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.eyebrow-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(30,215,96,.75)}
+h1{font-size:62px;line-height:.98;letter-spacing:-.045em;margin:18px 0 12px;font-weight:900}.green{color:var(--green)}.subtitle{font-size:20px;line-height:1.45;color:#a4afa8;max-width:860px}.brand{display:flex;align-items:center;gap:17px;padding:15px 19px;border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.025);min-width:290px}.brand-logo{width:68px;height:68px;border-radius:20px;object-fit:contain;background:rgba(30,215,96,.08);padding:6px}.brand-fallback{width:68px;height:68px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,#2be873,#0a8f3d);color:#041108;font-weight:950;font-size:34px}.brand small{display:block;color:#728078;font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase;margin-bottom:5px}.brand strong{font-size:25px;letter-spacing:-.025em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:31px 0 30px}.stat{border:1px solid var(--line);background:rgba(255,255,255,.028);border-radius:20px;padding:20px 22px}.stat-value{font-size:32px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-bottom:8px}.stat-label{font-size:11px;color:#758279;letter-spacing:.16em;text-transform:uppercase;font-weight:750}
+.products{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px}.product-card{min-height:224px;border-radius:24px;padding:19px;border:1px solid var(--line);background:radial-gradient(circle at 100% 0,rgba(30,215,96,.07),transparent 34%),linear-gradient(180deg,rgba(15,20,17,.97),rgba(9,13,10,.98));box-shadow:0 18px 35px rgba(0,0,0,.22)}.product-main{display:grid;grid-template-columns:90px 1fr;gap:16px;align-items:start}.thumb{width:90px;height:90px;border-radius:20px;overflow:hidden;display:grid;place-items:center;background:var(--fallback);border:1px solid rgba(255,255,255,.09);font-size:25px;font-weight:900}.thumb img{width:100%;height:100%;object-fit:cover}.thumb img.fallback-logo{object-fit:contain;padding:12px;background:#090d0a}.category{color:#7f8c84;font-size:11px;line-height:1.2;font-weight:750;letter-spacing:.14em;text-transform:uppercase;margin:5px 0 9px}.product-name{font-size:21px;line-height:1.12;letter-spacing:-.025em;font-weight:850;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.divider{height:1px;background:var(--line);margin:17px 0 15px}.product-meta{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.meta-label{color:#748178;font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px}.price{font-size:24px;font-weight:900;letter-spacing:-.035em}.stock-badge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:10px 13px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.badge-dot{width:7px;height:7px;border-radius:50%;background:currentColor}.stock-badge.normal{color:#6ff19d;background:rgba(30,215,96,.11);border:1px solid rgba(30,215,96,.27)}.stock-badge.low{color:#ffc370;background:rgba(255,173,77,.10);border:1px solid rgba(255,173,77,.28)}.stock-badge.unlimited{color:#d9e0dc;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.13)}
+.empty{grid-column:1/-1;min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:26px;background:rgba(255,255,255,.025);gap:10px}.empty strong{font-size:30px}.empty span{font-size:17px;color:var(--muted)}
+.footer{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-top:28px;padding-top:20px;border-top:1px solid var(--line);color:#89958d;font-size:13px}.footer strong{color:#e7ece9}.live{display:flex;align-items:center;gap:10px}.live-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(30,215,96,.11)}.page{color:#70e99b;font-weight:750}
+</style>
+</head>
+<body>
+<section class="stock-board">
+  <div class="inner">
+    <header class="header">
+      <div>
+        <div class="eyebrow"><span class="eyebrow-dot"></span>Live catalog</div>
+        <h1><span class="green">LIVE</span> STOCK</h1>
+        <div class="subtitle">${escaparHtml(subtitle || 'Current availability synchronized automatically from SellAuth.')}</div>
+      </div>
+      <div class="brand">
+        ${logo ? `<img class="brand-logo" src="${logo}" alt="" />` : `<div class="brand-fallback">SM</div>`}
+        <div><small>Spotify Market</small><strong>${escaparHtml(title || 'Stock board')}</strong></div>
+      </div>
+    </header>
+    <div class="stats">
+      <div class="stat"><div class="stat-value">${todos.length}</div><div class="stat-label">Products live</div></div>
+      <div class="stat"><div class="stat-value">${infinitos ? `${unidades}+` : unidades}</div><div class="stat-label">Units ready</div></div>
+      <div class="stat"><div class="stat-value">${categorias}</div><div class="stat-label">Categories</div></div>
+    </div>
+    <main class="products">${cards}</main>
+    <footer class="footer">
+      <div><strong>Spotify Market</strong> / SellAuth live stock board</div>
+      <div class="live"><span class="live-dot"></span><span class="page">${paginaTexto}</span><span>·</span><span>${escaparHtml(actualizado)}</span></div>
+    </footer>
+  </div>
+</section>
+</body>
+</html>`;
+}
+
+async function navegador() {
+    if (browserPromise) return browserPromise;
+    browserPromise = (async () => {
+        let puppeteer;
+        try {
+            puppeteer = require('puppeteer');
+        } catch {
+            throw new Error('Falta Puppeteer. Ejecuta `pnpm install` en el bot antes de reiniciarlo.');
+        }
+
+        try {
+            return await puppeteer.launch({
+                headless: true,
+                executablePath: process.env.CHROMIUM_PATH?.trim() || undefined,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu'
+                ]
+            });
+        } catch (error) {
+            browserPromise = null;
+            throw new Error(`Chromium no pudo arrancar para el stock HTML: ${error.message}`);
+        }
+    })();
+    return browserPromise;
+}
+
+async function renderizar(html) {
+    const browser = await navegador();
+    const page = await browser.newPage();
+    try {
+        await page.setViewport({ width: 1680, height: 1800, deviceScaleFactor: 1 });
+        await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.evaluate(async () => {
+            if (document.fonts?.ready) await document.fonts.ready;
+        });
+        const board = await page.$('.stock-board');
+        if (!board) throw new Error('No se encontro .stock-board al renderizar.');
+        return Buffer.from(await board.screenshot({ type: 'png' }));
+    } finally {
+        await page.close().catch(() => null);
+    }
+}
+
+function dividir(lista, tamano) {
+    const paginas = [];
+    for (let i = 0; i < lista.length; i += tamano) paginas.push(lista.slice(i, i + tamano));
+    return paginas.length ? paginas : [[]];
+}
+
+function nombreArchivoStock(pagina = 1, total = 1) {
+    return total > 1
+        ? `spotify-market-live-stock-${String(pagina).padStart(2, '0')}.png`
+        : 'spotify-market-live-stock.png';
+}
+
+async function generarPanelesStock(productos, opciones = {}) {
     const disponibles = productos
         .filter(producto => producto?.visible && Number(producto.stock) !== 0)
-        .sort((a, b) => String(a.categoria).localeCompare(String(b.categoria)) || String(a.nombre).localeCompare(String(b.nombre)));
+        .sort((a, b) => String(a.categoria || '').localeCompare(String(b.categoria || '')) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
 
-    const columnas = disponibles.length <= 2 ? Math.max(1, disponibles.length) : disponibles.length <= 6 ? 3 : 4;
-    const margen = 58;
-    const gap = 22;
-    const cabecera = 322;
-    const pie = 104;
-    const altoCard = 232;
-    const filas = Math.max(1, Math.ceil(disponibles.length / Math.max(1, columnas)));
-    const alto = cabecera + filas * altoCard + Math.max(0, filas - 1) * gap + pie + 28;
-    const canvas = createCanvas(ANCHO, alto);
-    const ctx = canvas.getContext('2d');
-
-    const gradiente = ctx.createLinearGradient(0, 0, ANCHO, alto);
-    gradiente.addColorStop(0, '#050806');
-    gradiente.addColorStop(.5, '#07110b');
-    gradiente.addColorStop(1, '#090b0a');
-    ctx.fillStyle = gradiente;
-    ctx.fillRect(0, 0, ANCHO, alto);
-
-    const fondo = await cargarImagen(FONDO_RUTA);
-    if (fondo) {
-        ctx.save();
-        ctx.globalAlpha = .05;
-        ctx.filter = 'blur(8px)';
-        cubrir(ctx, fondo, -20, -20, ANCHO + 40, alto + 40);
-        ctx.restore();
+    const porPagina = Math.min(Math.max(Number(opciones.productsPerPage) || PRODUCTOS_POR_PAGINA, 6), 12);
+    const maxPaginas = Math.min(Math.max(Number(opciones.maxPages) || 3, 1), MAX_PAGINAS_DISCORD);
+    const limite = porPagina * maxPaginas;
+    const visibles = disponibles.slice(0, limite);
+    if (disponibles.length > limite) {
+        logger.warn('sellauth:stock-html', `${disponibles.length - limite} productos no caben en las ${maxPaginas} paginas configuradas.`);
     }
 
-    const glow = ctx.createRadialGradient(1280, 90, 20, 1280, 90, 650);
-    glow.addColorStop(0, 'rgba(30,215,96,.20)');
-    glow.addColorStop(1, 'rgba(30,215,96,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, ANCHO, 720);
+    const [recursos, hidratados] = await Promise.all([
+        recursosLocales(),
+        hidratarImagenes(visibles)
+    ]);
+    const paginas = dividir(hidratados, porPagina);
+    const updatedAt = Number(opciones.updatedAt) || Date.now();
+    const totalPaginas = paginas.length;
+    const resultados = [];
 
-    const logo = await cargarImagen(LOGO_RUTA);
-    if (logo) contener(ctx, logo, 1290, 46, 242, 118);
-
-    etiqueta(ctx, 'LIVE CATALOG', margen, 52);
-    ctx.font = fuente(880, 62);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(String(opciones.title || 'PRODUCT STOCK'), margen, 148);
-    ctx.font = fuente(550, 22);
-    ctx.fillStyle = '#a6b2aa';
-    ctx.fillText(String(opciones.subtitle || 'Available products, synced automatically from SellAuth.').slice(0, 105), margen, 190);
-
-    const unidades = disponibles.filter(p => p.stock > 0).reduce((total, p) => total + Number(p.stock), 0);
-    const infinitos = disponibles.filter(p => p.stock < 0).length;
-    const categorias = new Set(disponibles.map(p => p.categoria).filter(Boolean)).size;
-    stat(ctx, margen, 222, 'products live', disponibles.length);
-    stat(ctx, margen + 220, 222, 'units ready', infinitos ? `${unidades}+` : unidades);
-    stat(ctx, margen + 440, 222, 'categories', categorias);
-
-    ctx.font = fuente(650, 14);
-    ctx.fillStyle = '#728077';
-    ctx.textAlign = 'right';
-    ctx.fillText('REAL-TIME INVENTORY BOARD', ANCHO - margen, 278);
-    ctx.textAlign = 'left';
-
-    if (!disponibles.length) {
-        const y = cabecera + 32;
-        rect(ctx, margen, y, ANCHO - margen * 2, 232, 28, 'rgba(255,255,255,.04)');
-        ctx.strokeStyle = 'rgba(255,255,255,.09)';
-        ctx.beginPath();
-        ctx.roundRect(margen, y, ANCHO - margen * 2, 232, 28);
-        ctx.stroke();
-        ctx.font = fuente(850, 34);
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.fillText('Stock is being prepared', ANCHO / 2, y + 99);
-        ctx.font = fuente(550, 18);
-        ctx.fillStyle = '#849087';
-        ctx.fillText('New availability will appear here automatically.', ANCHO / 2, y + 139);
-        ctx.textAlign = 'left';
-    } else {
-        const anchoCard = (ANCHO - margen * 2 - gap * (columnas - 1)) / columnas;
-        const miniaturas = await cargarMiniaturas(disponibles);
-        const umbral = Number.isFinite(Number(opciones.lowStockThreshold)) ? Number(opciones.lowStockThreshold) : 3;
-
-        disponibles.forEach((producto, i) => {
-            const fila = Math.floor(i / columnas);
-            const columna = i % columnas;
-            const x = margen + columna * (anchoCard + gap);
-            const y = cabecera + fila * (altoCard + gap);
-
-            ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,.34)';
-            ctx.shadowBlur = 24;
-            rect(ctx, x, y, anchoCard, altoCard, 26, 'rgba(13,18,15,.91)');
-            ctx.restore();
-            ctx.strokeStyle = 'rgba(255,255,255,.095)';
-            ctx.beginPath();
-            ctx.roundRect(x, y, anchoCard, altoCard, 26);
-            ctx.stroke();
-
-            const thumb = 94;
-            const tx = x + 20;
-            const ty = y + 21;
-            ctx.save();
-            ctx.beginPath();
-            ctx.roundRect(tx, ty, thumb, thumb, 20);
-            ctx.clip();
-            ctx.fillStyle = '#090d0a';
-            ctx.fillRect(tx, ty, thumb, thumb);
-            if (miniaturas[i]) cubrir(ctx, miniaturas[i], tx, ty, thumb, thumb);
-            else if (logo) contener(ctx, logo, tx + 12, ty + 12, thumb - 24, thumb - 24);
-            ctx.restore();
-            ctx.strokeStyle = 'rgba(255,255,255,.10)';
-            ctx.beginPath();
-            ctx.roundRect(tx, ty, thumb, thumb, 20);
-            ctx.stroke();
-
-            const contenidoX = tx + thumb + 18;
-            const contenidoW = anchoCard - (contenidoX - x) - 18;
-            ctx.font = fuente(850, 19);
-            ctx.fillStyle = '#fff';
-            lineas(ctx, producto.nombre, contenidoW, 2).forEach((linea, j) => ctx.fillText(linea, contenidoX, y + 48 + j * 25));
-            ctx.font = fuente(650, 12);
-            ctx.fillStyle = '#7f8f84';
-            ctx.letterSpacing = '.8px';
-            ctx.fillText(String(producto.categoria || 'CATALOG').toUpperCase().slice(0, 30), contenidoX, y + 105);
-            ctx.letterSpacing = '0px';
-
-            ctx.fillStyle = 'rgba(255,255,255,.08)';
-            ctx.fillRect(x + 20, y + 132, anchoCard - 40, 1);
-            ctx.font = fuente(600, 12);
-            ctx.fillStyle = '#7f8f84';
-            ctx.fillText('PRICE', x + 20, y + 165);
-            ctx.font = fuente(850, 22);
-            ctx.fillStyle = '#fff';
-            ctx.fillText(arte.precio(producto.precio, producto.moneda), x + 20, y + 197);
-            badgeStock(ctx, x + anchoCard - 20, y + 164, producto, umbral);
+    for (let i = 0; i < paginas.length; i += 1) {
+        const html = htmlPagina(paginas[i], {
+            todos: hidratados,
+            pagina: i + 1,
+            totalPaginas,
+            title: opciones.title || 'Stock board',
+            subtitle: opciones.subtitle || 'Current availability synchronized automatically from SellAuth.',
+            lowStockThreshold: Number.isFinite(Number(opciones.lowStockThreshold)) ? Number(opciones.lowStockThreshold) : 3,
+            updatedAt,
+            ...recursos
+        });
+        resultados.push({
+            pagina: i + 1,
+            totalPaginas,
+            nombre: nombreArchivoStock(i + 1, totalPaginas),
+            buffer: await renderizar(html)
         });
     }
 
-    const pieY = alto - pie;
-    ctx.fillStyle = 'rgba(255,255,255,.08)';
-    ctx.fillRect(margen, pieY, ANCHO - margen * 2, 1);
-    ctx.font = fuente(650, 14);
-    ctx.fillStyle = '#8a988f';
-    ctx.letterSpacing = '1px';
-    ctx.fillText('SPOTIFY MARKET  /  SELLAUTH LIVE STOCK', margen, pieY + 43);
-    ctx.letterSpacing = '0px';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#607067';
-    const actualizado = new Date(opciones.updatedAt || Date.now()).toLocaleString('en-GB', {
-        timeZone: 'Europe/Madrid',
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-    });
-    ctx.fillText(`UPDATED ${actualizado.toUpperCase()} · AUTO-SYNC`, ANCHO - margen, pieY + 43);
-    ctx.textAlign = 'left';
-
-    return canvas.toBuffer('image/png');
+    return resultados;
 }
 
-function nombreArchivoStock() {
-    return 'spotify-market-live-stock.png';
+async function cerrar() {
+    if (!browserPromise) return;
+    try {
+        const browser = await browserPromise;
+        await browser.close();
+    } catch {
+        // El proceso ya esta cerrando; no hay nada que recuperar aqui.
+    } finally {
+        browserPromise = null;
+    }
 }
 
-module.exports = { generarPanelStock, nombreArchivoStock, ANCHO };
+module.exports = {
+    ANCHO,
+    PRODUCTOS_POR_PAGINA,
+    generarPanelesStock,
+    nombreArchivoStock,
+    cerrar
+};
