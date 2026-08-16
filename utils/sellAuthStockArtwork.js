@@ -12,11 +12,10 @@ const FONT_PATH = path.join(ROOT, 'assets', 'fuentes', 'Montserrat-Variable.ttf'
 const LOGO_PATH = path.join(ROOT, 'assets', 'brand', 'SpotifyMarket.png');
 const ANCHO = 2400;
 const PRODUCTOS_POR_PAGINA = 60;
-const RENDERER_VERSION = 'html-chromium-cdp-v10-single-board-clean';
+const RENDERER_VERSION = 'html-chrome-cli-v11-single-board-safe';
+const RENDER_TIMEOUT_MS = 18000;
 
 let chromiumCache;
-let browserPromise = null;
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function esc(v) {
     return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -24,7 +23,10 @@ function esc(v) {
 
 function money(value, currency = 'EUR') {
     try {
-        return new Intl.NumberFormat('en-GB', { style: 'currency', currency: String(currency || 'EUR').toUpperCase(), minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
+        return new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: String(currency || 'EUR').toUpperCase(),
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        }).format(Number(value || 0));
     } catch {
         return `${Number(value || 0).toFixed(2)} ${String(currency || 'EUR').toUpperCase()}`;
     }
@@ -71,7 +73,7 @@ function layoutFor(count) {
 function pageHeight(count, layout) {
     const rows = Math.max(1, Math.ceil(Math.max(1, count) / layout.columns));
     const productsHeight = rows * layout.cardHeight + Math.max(0, rows - 1) * layout.gap;
-    return layout.topReserve + productsHeight + (layout.compact ? 96 : 118) + 36;
+    return layout.topReserve + productsHeight + (layout.compact ? 100 : 122) + 44;
 }
 
 function productCard(product, low, logo, layout) {
@@ -121,12 +123,8 @@ function puppeteerCandidates() {
     const home = process.env.HOME || os.homedir();
     const out = [];
     for (const base of [path.join(home, '.cache', 'puppeteer', 'chrome'), path.join(home, '.cache', 'puppeteer', 'chrome-headless-shell')]) {
-        try {
-            for (const version of fs.readdirSync(base)) {
-                out.push(path.join(base, version, 'chrome-linux64', 'chrome'));
-                out.push(path.join(base, version, 'chrome-headless-shell-linux64', 'chrome-headless-shell'));
-            }
-        } catch {}
+        try { for (const version of fs.readdirSync(base)) { out.push(path.join(base, version, 'chrome-linux64', 'chrome')); out.push(path.join(base, version, 'chrome-headless-shell-linux64', 'chrome-headless-shell')); } }
+        catch {}
     }
     return out;
 }
@@ -136,64 +134,73 @@ function resolveChromium() {
     const candidates = [process.env.CHROMIUM_PATH?.trim(), process.env.PUPPETEER_EXECUTABLE_PATH?.trim(), process.env.CHROME_PATH?.trim(), '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium', ...puppeteerCandidates()].filter(Boolean);
     for (const file of candidates) if (isExecutable(file)) return chromiumCache = file;
     for (const name of ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser']) {
-        try {
-            const file = execFileSync('which', [name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-            if (isExecutable(file)) return chromiumCache = file;
-        } catch {}
+        try { const file = execFileSync('which', [name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); if (isExecutable(file)) return chromiumCache = file; }
+        catch {}
     }
     return chromiumCache = '';
 }
 
-class CdpClient {
-    constructor(url) {
-        this.ws = new WebSocket(url); this.id = 0; this.pending = new Map();
-        this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = () => reject(new Error('No se pudo abrir WebSocket con Chromium.')); });
-        this.ws.onmessage = event => { const msg = JSON.parse(event.data); if (!msg.id || !this.pending.has(msg.id)) return; const p = this.pending.get(msg.id); this.pending.delete(msg.id); msg.error ? p.reject(new Error(msg.error.message || JSON.stringify(msg.error))) : p.resolve(msg.result); };
-        this.ws.onclose = () => { for (const p of this.pending.values()) p.reject(new Error('Chromium cerro la conexion CDP.')); this.pending.clear(); };
-    }
-    async send(method, params = {}, sessionId = '') { await this.ready; const id = ++this.id; return new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); }); }
-    close() { try { this.ws.close(); } catch {} }
+function killChild(child) {
+    if (!child || child.exitCode !== null || child.killed) return;
+    try { child.kill('SIGKILL'); } catch {}
 }
 
-async function startBrowser() {
+function render(html, width, height) {
     const chromium = resolveChromium();
-    if (!chromium) throw new Error('No hay Chromium disponible. Instala Chrome/Chromium en la VPS o define CHROMIUM_PATH.');
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotify-stock-browser-'));
-    const process = spawn(chromium, ['--headless', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'], env: { ...global.process.env, HOME: global.process.env.HOME || os.tmpdir() } });
-    let stderr = '', wsUrl = '';
-    process.stderr.setEncoding('utf8');
-    process.stderr.on('data', chunk => { stderr += chunk; if (stderr.length > 12000) stderr = stderr.slice(-12000); const m = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (m) wsUrl = m[1]; });
-    for (let i = 0; i < 120 && !wsUrl; i++) { if (process.exitCode !== null) break; await sleep(50); }
-    if (!wsUrl) { process.kill('SIGTERM'); fs.rmSync(dir, { recursive: true, force: true }); throw new Error(`Chromium no expuso DevTools: ${stderr.trim().slice(-700) || 'sin detalle'}`); }
-    const cdp = new CdpClient(wsUrl); await cdp.ready;
-    const browser = { process, dir, cdp, chromium }; process.once('exit', () => { browserPromise = null; });
-    logger.detalle(`Stock HTML renderer ${RENDERER_VERSION} · Chromium ${chromium}`);
-    return browser;
+    if (!chromium) return Promise.reject(new Error('No hay Chrome/Chromium disponible. Define CHROMIUM_PATH.'));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotify-stock-render-'));
+    const htmlPath = path.join(dir, 'board.html');
+    const outputPath = path.join(dir, 'stock.png');
+    fs.writeFileSync(htmlPath, html, 'utf8');
+
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let stderr = '';
+        const finish = (error, buffer = null) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            fs.rmSync(dir, { recursive: true, force: true });
+            error ? reject(error) : resolve(buffer);
+        };
+
+        const args = [
+            '--headless=new', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+            '--hide-scrollbars', '--allow-file-access-from-files', '--run-all-compositor-stages-before-draw',
+            '--virtual-time-budget=5000', `--window-size=${width},${height}`, '--force-device-scale-factor=1',
+            `--screenshot=${outputPath}`, `file://${htmlPath}`
+        ];
+        const child = spawn(chromium, args, {
+            stdio: ['ignore', 'ignore', 'pipe'],
+            env: { ...process.env, HOME: process.env.HOME || os.tmpdir() }
+        });
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', chunk => { stderr += chunk; if (stderr.length > 8000) stderr = stderr.slice(-8000); });
+
+        const timer = setTimeout(() => {
+            killChild(child);
+            finish(new Error(`Chrome agotó ${Math.round(RENDER_TIMEOUT_MS / 1000)}s generando la imagen de stock.`));
+        }, RENDER_TIMEOUT_MS);
+
+        child.once('error', error => finish(new Error(`No se pudo iniciar Chrome: ${error.message}`)));
+        child.once('close', code => {
+            if (settled) return;
+            try {
+                if (code !== 0 || !fs.existsSync(outputPath)) {
+                    return finish(new Error(`Chrome no generó la captura (código ${code ?? '?'}): ${stderr.trim().slice(-500) || 'sin detalle'}`));
+                }
+                const buffer = fs.readFileSync(outputPath);
+                if (buffer.length < 10000) return finish(new Error('Chrome generó una captura demasiado pequeña.'));
+                finish(null, buffer);
+            } catch (error) {
+                finish(error);
+            }
+        });
+    });
 }
 
-async function getBrowser() {
-    if (!browserPromise) browserPromise = startBrowser().catch(error => { browserPromise = null; throw error; });
-    return browserPromise;
-}
-
-async function render(html, width, height) {
-    const browser = await getBrowser(), { cdp } = browser;
-    const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
-    try {
-        const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-        await cdp.send('Page.enable', {}, sessionId);
-        await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
-        const { frameTree } = await cdp.send('Page.getFrameTree', {}, sessionId);
-        await cdp.send('Page.setDocumentContent', { frameId: frameTree.frame.id, html }, sessionId);
-        await cdp.send('Runtime.evaluate', { expression: `Promise.all([document.fonts?.ready,Promise.race([Promise.all([...document.images].map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r}))),new Promise(r=>setTimeout(r,4500))])]).then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`, awaitPromise: true, returnByValue: true }, sessionId);
-        const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, fromSurface: true, captureBeyondViewport: false }, sessionId);
-        const buffer = Buffer.from(shot.data, 'base64');
-        if (buffer.length < 10000) throw new Error('Chromium genero una captura demasiado pequena.');
-        return buffer;
-    } finally { await cdp.send('Target.closeTarget', { targetId }).catch(() => null); }
-}
-
-function nombreArchivoStock() { return 'spotify-market-live-stock.jpg'; }
+function nombreArchivoStock() { return 'spotify-market-live-stock.png'; }
 
 async function generarPanelesStock(productos, opciones = {}) {
     const available = productos.filter(x => x?.visible && Number(x.stock) !== 0).sort((a, b) => String(a.categoria || '').localeCompare(String(b.categoria || '')) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
@@ -203,15 +210,13 @@ async function generarPanelesStock(productos, opciones = {}) {
     const font = dataFile(FONT_PATH, 'font/ttf'), logo = dataFile(LOGO_PATH, 'image/png');
     const html = pageHtml(available, { all: available, subtitle: opciones.subtitle || 'Current availability synchronized automatically from SellAuth.', lowStockThreshold, updatedAt, font, logo, layout });
     const height = pageHeight(available.length, layout), nombre = nombreArchivoStock();
-    logger.detalle(`Stock single-board clean: ${available.length} productos · ${layout.columns} columnas · ${layout.width}x${height}`);
-    return [{ pagina: 1, totalPaginas: 1, nombre, buffer: await render(html, layout.width, height) }];
+    logger.detalle(`Stock safe-render: ${available.length} productos · ${layout.columns} columnas · ${layout.width}x${height} · ${chromiumCache || resolveChromium()}`);
+    const buffer = await render(html, layout.width, height);
+    logger.detalle(`Stock safe-render completado: ${(buffer.length / 1024).toFixed(0)} KB`);
+    return [{ pagina: 1, totalPaginas: 1, nombre, buffer }];
 }
 
-async function cerrar() {
-    if (!browserPromise) return;
-    try { const b = await browserPromise; b.cdp.close(); b.process.kill('SIGTERM'); await sleep(100); fs.rmSync(b.dir, { recursive: true, force: true }); }
-    catch {} finally { browserPromise = null; }
-}
+async function cerrar() {}
 
 function diagnostico() {
     const chromium = resolveChromium();
