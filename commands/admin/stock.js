@@ -13,6 +13,16 @@ const config = require('../../utils/config');
 const ui = require('../../utils/ui');
 const stockArte = require('../../utils/sellAuthStockArtwork');
 
+function conTimeout(promesa, ms, etiqueta) {
+    let timer;
+    return Promise.race([
+        Promise.resolve(promesa),
+        new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${etiqueta} agotó ${Math.round(ms / 1000)}s.`)), ms);
+        })
+    ]).finally(() => clearTimeout(timer));
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('stock')
@@ -61,17 +71,21 @@ module.exports = {
             config.guardar('sellauth', ajustes);
 
             try {
-                const mensaje = await sistema.actualizarPanelStock({ canal, forzar: true });
+                const mensaje = await conTimeout(
+                    sistema.actualizarPanelStock({ canal, forzar: true }),
+                    30000,
+                    'Stock board render'
+                );
                 return interaction.editReply({
                     components: [ui.exito(
                         emojis,
-                        `Stock board configured in <#${canal.id}>.\n-# HTML/Chromium renderer active. The same message updates automatically after SellAuth stock changes.${mensaje?.url ? `\n[Open stock board](${mensaje.url})` : ''}`
+                        `Stock board configured in <#${canal.id}>.${mensaje?.url ? `\n-# [Open stock board](${mensaje.url})` : ''}`
                     )],
                     flags: ui.V2
                 });
             } catch (error) {
                 return interaction.editReply({
-                    components: [ui.error(emojis, `The channel was saved, but the HTML board could not be published: ${ui.plano(error.message)}`)],
+                    components: [ui.error(emojis, `The channel was saved, but the stock board could not be published: ${ui.plano(error.message)}`)],
                     flags: ui.V2
                 });
             }
@@ -79,8 +93,12 @@ module.exports = {
 
         if (accion === 'refresh') {
             try {
-                await sistema.sincronizar({ anunciar: false });
-                const mensaje = await sistema.actualizarPanelStock({ forzar: true });
+                await conTimeout(sistema.sincronizar({ anunciar: false }), 15000, 'SellAuth sync');
+                const mensaje = await conTimeout(
+                    sistema.actualizarPanelStock({ forzar: true }),
+                    30000,
+                    'Stock board render'
+                );
                 if (!mensaje) {
                     return interaction.editReply({
                         components: [ui.aviso(emojis, 'Configure a stock channel first with `/stock action:Set stock channel`.')],
@@ -88,12 +106,12 @@ module.exports = {
                     });
                 }
                 return interaction.editReply({
-                    components: [ui.exito(emojis, `HTML stock board regenerated successfully.\n-# [Open stock board](${mensaje.url})`)],
+                    components: [ui.exito(emojis, `Stock board regenerated successfully.\n-# [Open stock board](${mensaje.url})`)],
                     flags: ui.V2
                 });
             } catch (error) {
                 return interaction.editReply({
-                    components: [ui.error(emojis, `HTML stock refresh failed: ${ui.plano(error.message)}`)],
+                    components: [ui.error(emojis, `Stock refresh failed: ${ui.plano(error.message)}`)],
                     flags: ui.V2
                 });
             }
