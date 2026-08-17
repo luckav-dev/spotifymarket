@@ -60,10 +60,7 @@
       "title": "PAYMENT RECEIVED",
       "description": "SellAuth confirmed the payment and processed the invoice.",
       "showEmail": true,
-      "statuses": ["completed", "partially_completed"],
-      "pollIntervalMs": 120000,
-      "firstRunLookbackMinutes": 30,
-      "invoiceButtonLabel": "View invoice"
+      "statuses": ["completed", "partially_completed"]
     },
     "restocks": {
       "enabled": true,
