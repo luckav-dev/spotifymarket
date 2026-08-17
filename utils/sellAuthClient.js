@@ -53,7 +53,11 @@ function retryAfterMsDe(respuesta, datos) {
 
 class SellAuthClient {
     constructor({ apiKey, shopId, baseUrl = SELLAUTH_API_BASE, timeoutMs = 12000 } = {}) {
-        const marketSecret = String(process.env.SPOTIFY_MARKET_API_SECRET ?? '').trim();
+        const marketSecret = String(
+            process.env.SPOTIFY_MARKET_API_SECRET
+            || process.env.SELLAUTH_WEBHOOK_SECRET
+            || ''
+        ).trim();
         this.mode = marketSecret ? 'market' : 'sellauth';
         this.apiKey = marketSecret || String(apiKey ?? '').trim();
         this.shopId = String(shopId ?? '').trim();
@@ -71,7 +75,7 @@ class SellAuthClient {
     async request(pathname, { method = 'GET', query, body, intento = 0 } = {}) {
         if (!this.apiKey) {
             throw new SellAuthError(this.mode === 'market'
-                ? 'Falta SPOTIFY_MARKET_API_SECRET en el entorno.'
+                ? 'Falta SPOTIFY_MARKET_API_SECRET o SELLAUTH_WEBHOOK_SECRET en el entorno.'
                 : 'Falta SELLAUTH_API_KEY en el entorno.');
         }
         if (this.mode === 'sellauth' && !/^\d+$/.test(this.shopId)) {
