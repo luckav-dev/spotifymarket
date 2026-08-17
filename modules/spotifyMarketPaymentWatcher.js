@@ -6,6 +6,20 @@ const logger = require('../utils/logger');
 const DEFAULT_WEB_URL = 'https://spotifymarket.xyz';
 
 class SpotifyMarketPaymentWatcher extends SellAuthPaymentWatcher {
+    get settings() {
+        const settings = super.settings;
+        return {
+            ...settings,
+            announcements: {
+                ...(settings.announcements ?? {}),
+                payments: {
+                    ...(settings.announcements?.payments ?? {}),
+                    invoiceButtonLabel: 'View order'
+                }
+            }
+        };
+    }
+
     async invoiceUrl(invoice) {
         const id = String(invoice?.id ?? '').trim();
         if (id && typeof this.api.crearEnlaceFactura === 'function') {
