@@ -125,6 +125,13 @@ class SellAuthPaymentWatcher {
         this.running = null;
         this.warnedNoChannel = false;
         this.shopBasePromise = null;
+
+        // El modulo principal de SellAuth recibe los webhooks. Redirigimos su
+        // publicacion de pagos a este watcher para que webhook y polling usen
+        // exactamente el mismo container, CTA y deduplicacion.
+        if (this.client.sistemas?.sellauth) {
+            this.client.sistemas.sellauth.publicarPago = invoice => this.publish(invoice, 'webhook');
+        }
     }
 
     get settings() {
