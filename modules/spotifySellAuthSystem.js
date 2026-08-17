@@ -25,19 +25,15 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
     async iniciar() {
         const resultado = await super.iniciar();
 
-        // Al arrancar aplicamos el nuevo estilo tanto a las reviews existentes
-        // como a la guia que ya estaba publicada en el canal.
+        // Al arrancar aplicamos el nuevo estilo a las reviews existentes y,
+        // cuando terminan, reemplazamos una sola vez la guia del canal.
         const timer = setTimeout(() => {
-            Promise.allSettled([
-                this.refrescarResenasPublicadas(),
-                this.refrescarGuiaPublicada()
-            ]).then(resultados => {
-                for (const resultadoRefresco of resultados) {
-                    if (resultadoRefresco.status === 'rejected') {
-                        logger.error('sellauth:reviews', resultadoRefresco.reason?.message || 'Review refresh failed');
-                    }
-                }
-            });
+            (async () => {
+                await this.refrescarResenasPublicadas();
+                await this.refrescarGuiaPublicada();
+            })().catch(error =>
+                logger.error('sellauth:reviews', `Review visual refresh failed: ${error.message}`)
+            );
         }, 1500);
         timer.unref?.();
 
