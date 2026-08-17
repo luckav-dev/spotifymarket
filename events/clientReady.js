@@ -12,6 +12,7 @@ const VerifySystem = require('../modules/verifySystem');
 const ModerationSystem = require('../modules/moderationSystem');
 const ShopSystem = require('../modules/shopSystem');
 const SellAuthSystem = require('../modules/minimalSellAuthAnnouncements');
+const SellAuthPaymentWatcher = require('../modules/sellAuthPaymentWatcher');
 const WelcomeSystem = require('../modules/welcomeSystem');
 const RulesSystem = require('../modules/rulesSystem');
 const StatusSystem = require('../modules/statusSystem');
@@ -47,9 +48,14 @@ module.exports = {
             mod: new ModerationSystem(client, emojis)
         };
 
+        // Fuera de client.sistemas: no enruta customIds; solo vigila facturas
+        // completadas para que las notificaciones de pago no dependan del webhook.
+        client.sellauthPayments = new SellAuthPaymentWatcher(client, emojis);
+
         client.sistemas.log.registrar();
         client.sistemas.verify.iniciar();
         await client.sistemas.sellauth.iniciar();
+        client.sellauthPayments.iniciar();
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
         await client.sistemas.welcome.iniciar();
