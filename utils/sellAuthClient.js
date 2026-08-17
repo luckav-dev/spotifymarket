@@ -1,7 +1,7 @@
 'use strict';
 
 const SELLAUTH_API_BASE = 'https://api.sellauth.com/v1';
-const MARKET_API_BASE = 'https://spotifymarket.xyz/api/bot';
+const MARKET_API_BASE = 'https://www.spotifymarket.xyz/api/bot';
 const MAX_REINTENTOS = 2;
 
 class SellAuthError extends Error {
