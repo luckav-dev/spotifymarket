@@ -46,22 +46,30 @@ module.exports = {
             mod: new ModerationSystem(client, emojis)
         };
 
-        // El constructor ya conecta los pagos del webhook con el container nuevo.
-        // El polling es solo respaldo, por eso se retrasa para no competir con la
-        // sincronizacion inicial de productos/resenas por el rate limit de SellAuth.
+        // El constructor conecta inmediatamente los pagos del webhook con el
+        // container nuevo. El polling es solo un respaldo por si el webhook no
+        // llega, asi que lo espaciamos para respetar el limite de la API.
         client.sellauthPayments = new SellAuthPaymentWatcher(client, emojis);
 
         client.sistemas.log.registrar();
         client.sistemas.verify.iniciar();
         await client.sistemas.sellauth.iniciar();
 
-        const paymentWatcherDelayMs = 65000;
+        const PAYMENT_START_DELAY_MS = 65 * 1000;
+        const PAYMENT_POLL_MS = 120 * 1000;
         client.sellauthPaymentsStartTimer = setTimeout(() => {
             client.sellauthPaymentsStartTimer = null;
-            client.sellauthPayments.iniciar();
-        }, paymentWatcherDelayMs);
+
+            client.sellauthPayments.scan();
+            client.sellauthPayments.timer = setInterval(
+                () => client.sellauthPayments.scan(),
+                PAYMENT_POLL_MS
+            );
+            client.sellauthPayments.timer.unref?.();
+            logger.paso('sellauth:payments', 'watcher de respaldo activo cada 120s');
+        }, PAYMENT_START_DELAY_MS);
         client.sellauthPaymentsStartTimer.unref?.();
-        logger.detalle(`Payment watcher de respaldo arrancara en ${Math.round(paymentWatcherDelayMs / 1000)}s para respetar el rate limit.`);
+        logger.detalle('Payment watcher de respaldo arrancara en 65s para dejar enfriar el rate limit de SellAuth.');
 
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
