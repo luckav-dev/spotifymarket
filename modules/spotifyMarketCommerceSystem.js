@@ -99,7 +99,7 @@ class SpotifyMarketCommerceSystem extends SpotifySellAuthSystem {
                 new SectionBuilder()
                     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                         `${this.emojis.rol('comprar')} **Continue on Spotify Market**\n` +
-                        `-# Open the product directly on spotifymarket.xyz. SellAuth remains the payment backend only.`
+                        `-# Open this product directly on spotifymarket.xyz to review the options and continue to checkout.`
                     ))
                     .setButtonAccessory(
                         ui.boton(this.emojis, {
