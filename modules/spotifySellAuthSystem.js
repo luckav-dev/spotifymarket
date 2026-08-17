@@ -87,12 +87,18 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
         const cliente = resena.userId ? `<@${resena.userId}>` : 'Verified customer';
         const verificado = this.emojis.rol('verificado') || this.emojis.get('success');
         const feedbackIcon = this.emojis.rol('info') || this.emojis.get('reply');
+        const usuarioIcon = this.emojis.rol('usuario') || this.emojis.get('user');
+        const walletIcon = this.emojis.get('wallet') || this.emojis.rol('verificado');
+        const relojIcon = this.emojis.rol('reloj') || this.emojis.get('clock');
+        const verificationText = resena.source === 'sellauth'
+            ? 'SellAuth verified feedback'
+            : 'SellAuth invoice verification';
 
         const container = new ContainerBuilder();
         const cabecera =
             `### ${verificado ? `${verificado} ` : ''}Verified Customer Review\n` +
             `${estrellas}\n` +
-            `-# ${cliente} · ${ui.fecha(resena.createdAt, 'R')}`;
+            `-# Verified purchase · Spotify Market`;
 
         if (avatarUrl) {
             container.addSectionComponents(
@@ -104,10 +110,17 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
         }
 
-        // En publico solo mostramos la experiencia. Producto, invoice y demas
-        // informacion del pedido quedan exclusivamente en View details.
+        // Un poco mas de contexto publico, sin revelar producto, variante,
+        // importe ni identificadores de la factura.
         container
             .addSeparatorComponents(ui.linea(false))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${usuarioIcon ? `${usuarioIcon} ` : ''}**Customer:** ${cliente}\n` +
+                `${verificado ? `${verificado} ` : ''}**Purchase:** Completed & verified\n` +
+                `${walletIcon ? `${walletIcon} ` : ''}**Verification:** ${verificationText}\n` +
+                `${relojIcon ? `${relojIcon} ` : ''}**Published:** ${ui.fecha(resena.createdAt, 'R')}`
+            ))
+            .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 `${feedbackIcon ? `${feedbackIcon} ` : ''}**Customer feedback**\n` +
                 `${ui.cita(ui.plano(resena.message))}`
