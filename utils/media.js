@@ -24,10 +24,22 @@ function esHttps(valor) {
     }
 }
 
+function nombreSeguro(nombreAdjunto, extension) {
+    const base = path.basename(nombreAdjunto, path.extname(nombreAdjunto))
+        .replace(/[^a-zA-Z0-9_-]/g, '-')
+        .slice(0, 70) || 'media';
+    return `${base}${extension}`;
+}
+
 /**
  * Convierte una imagen configurable en URL utilizable por Components V2.
  * Los archivos locales quedan restringidos a assets/ y se adjuntan sin
  * modificarlos. Las URL https pasan directas.
+ *
+ * Tambien soporta assets terminados en `.b64`: el contenido es una imagen
+ * codificada en base64 que se decodifica en memoria. Esto permite mantener
+ * banners binarios versionados en el repo incluso cuando el escritor de
+ * GitHub solo admite archivos UTF-8.
  */
 function resolver(valor, nombreAdjunto = 'media.png') {
     const origen = origenDe(valor);
@@ -38,11 +50,29 @@ function resolver(valor, nombreAdjunto = 'media.png') {
     const relativa = path.relative(DIR_ASSETS, ruta);
     if (relativa.startsWith('..') || path.isAbsolute(relativa) || !fs.existsSync(ruta)) return null;
 
+    if (/\.b64$/i.test(ruta)) {
+        try {
+            const codificado = fs.readFileSync(ruta, 'utf8').replace(/\s+/g, '');
+            if (!codificado) return null;
+
+            const buffer = Buffer.from(codificado, 'base64');
+            if (!buffer.length) return null;
+
+            const rutaOriginal = ruta.replace(/\.b64$/i, '');
+            const extension = path.extname(rutaOriginal) || '.bin';
+            const nombre = nombreSeguro(nombreAdjunto, extension);
+
+            return {
+                url: `attachment://${nombre}`,
+                files: [new AttachmentBuilder(buffer, { name: nombre })]
+            };
+        } catch {
+            return null;
+        }
+    }
+
     const extension = path.extname(ruta);
-    const base = path.basename(nombreAdjunto, path.extname(nombreAdjunto))
-        .replace(/[^a-zA-Z0-9_-]/g, '-')
-        .slice(0, 70) || 'media';
-    const nombre = `${base}${extension}`;
+    const nombre = nombreSeguro(nombreAdjunto, extension);
 
     return {
         url: `attachment://${nombre}`,
