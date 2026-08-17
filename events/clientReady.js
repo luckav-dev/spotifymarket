@@ -33,8 +33,6 @@ module.exports = {
 
         const emojis = client.emojiManager;
 
-        // Las claves son el dominio del customId: interactionCreate reparte por
-        // el prefijo, sin conocer ningun sistema en concreto.
         client.sistemas = {
             ticket: new TicketSystem(client, emojis),
             verify: new VerifySystem(client, emojis),
@@ -48,14 +46,23 @@ module.exports = {
             mod: new ModerationSystem(client, emojis)
         };
 
-        // Fuera de client.sistemas: no enruta customIds; solo vigila facturas
-        // completadas para que las notificaciones de pago no dependan del webhook.
+        // El constructor ya conecta los pagos del webhook con el container nuevo.
+        // El polling es solo respaldo, por eso se retrasa para no competir con la
+        // sincronizacion inicial de productos/resenas por el rate limit de SellAuth.
         client.sellauthPayments = new SellAuthPaymentWatcher(client, emojis);
 
         client.sistemas.log.registrar();
         client.sistemas.verify.iniciar();
         await client.sistemas.sellauth.iniciar();
-        client.sellauthPayments.iniciar();
+
+        const paymentWatcherDelayMs = 65000;
+        client.sellauthPaymentsStartTimer = setTimeout(() => {
+            client.sellauthPaymentsStartTimer = null;
+            client.sellauthPayments.iniciar();
+        }, paymentWatcherDelayMs);
+        client.sellauthPaymentsStartTimer.unref?.();
+        logger.detalle(`Payment watcher de respaldo arrancara en ${Math.round(paymentWatcherDelayMs / 1000)}s para respetar el rate limit.`);
+
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
         await client.sistemas.welcome.iniciar();
@@ -63,8 +70,6 @@ module.exports = {
 
         logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));
 
-        // Fuera de client.sistemas a proposito: ahi solo van los dominios de
-        // customId que enruta interactionCreate, y la API no atiende ninguno.
         client.api = new ApiServer(client, emojis);
         client.api.iniciar();
 
