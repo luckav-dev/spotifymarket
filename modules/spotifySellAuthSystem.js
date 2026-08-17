@@ -14,8 +14,8 @@ const ui = require('../utils/ui');
 
 const REVIEW_DETAILS_DELAY_MS = 1000;
 const SPOTIFY_GREEN = 0x1ED760;
-const DETAILS_BUTTON_LABEL = 'Purchase details';
-const REVIEW_BUTTON_LABEL = 'Leave a review';
+const DETAILS_BUTTON_LABEL = 'Details';
+const REVIEW_BUTTON_LABEL = 'Review';
 
 function esperar(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -25,7 +25,7 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
     async iniciar() {
         const resultado = await super.iniciar();
 
-        // Al arrancar aplicamos el nuevo estilo a las reviews existentes y,
+        // Al arrancar aplicamos el estilo compacto a las reviews existentes y,
         // cuando terminan, reemplazamos una sola vez la guia del canal.
         const timer = setTimeout(() => {
             (async () => {
@@ -65,7 +65,7 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
 
         await this.borrarGuiaAnterior(canal);
         await this.enviarGuia(canal);
-        logger.detalle('Review guide refresh: guia plana actualizada.');
+        logger.detalle('Review guide refresh: guia compacta actualizada.');
         return true;
     }
 
@@ -78,9 +78,9 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
         // containers del bot que usan accent color.
         const container = new ContainerBuilder().setAccentColor(SPOTIFY_GREEN);
         const cabecera =
-            `## ${this.emojis.rol('valoracion')} ${this.config.reviews.title}\n` +
-            `${estrellas}\n` +
-            `-# Verified purchase · ${resena.source === 'sellauth' ? 'Published through SellAuth' : 'Invoice verified by SellAuth'}`;
+            `## ${this.emojis.rol('valoracion')} Verified Review\n` +
+            `${estrellas} · ${cliente}\n` +
+            `-# Verified by SellAuth · ${ui.fecha(resena.createdAt, 'R')}`;
 
         if (avatarUrl) {
             container.addSectionComponents(
@@ -92,40 +92,31 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
         }
 
-        // Nada sensible de la compra se enseña en publico: ni producto ni
-        // referencia de factura. Ambos quedan para Purchase details.
+        // Publicamente solo mostramos la experiencia. Producto, factura y
+        // datos de compra permanecen exclusivamente en Details.
         container
-            .addSeparatorComponents(ui.linea())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `${this.emojis.rol('verificado')} **Purchase:** Verified\n` +
-                `${this.emojis.rol('usuario')} **Customer:** ${cliente}\n` +
-                `${this.emojis.rol('reloj')} **Published:** ${ui.fecha(resena.createdAt, 'f')}`
-            ))
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('info')} Customer feedback\n${ui.cita(ui.plano(resena.message))}`
+                `${this.emojis.rol('info')} **Feedback**\n${ui.cita(ui.plano(resena.message))}`
             ));
 
         if (resena.reply) {
             container
                 .addSeparatorComponents(ui.aire())
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                    `### ${this.emojis.rol('reply')} Spotify Market response\n${ui.cita(ui.plano(resena.reply))}`
+                    `${this.emojis.rol('reply')} **Spotify Market reply**\n${ui.cita(ui.plano(resena.reply))}`
                 ));
         }
 
         const banner = media.resolver(this.config.reviews.banner, `review-${resena.key}`);
         if (banner) {
             container
-                .addSeparatorComponents(ui.linea())
+                .addSeparatorComponents(ui.aire())
                 .addMediaGalleryComponents(ui.galeria([banner.url], 'Spotify Market verified customer review'));
         }
 
         container
-            .addSeparatorComponents(ui.linea())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `**Verified review**\n-# Purchase information is private. Open the details only when you need to verify it.`
-            ))
+            .addSeparatorComponents(ui.aire())
             .addActionRowComponents(ui.fila(
                 ui.boton(this.emojis, {
                     id: `sellauth:review-details:${resena.key}`,
@@ -139,10 +130,6 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
                     estilo: 'exito',
                     emoji: 'anadir'
                 })
-            ))
-            .addSeparatorComponents(ui.aire())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `-# Spotify Market · Verified by SellAuth · ${ui.fecha(resena.updatedAt || resena.createdAt, 'R')}`
             ));
 
         return {
@@ -158,26 +145,23 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
         const abrir = this.emojis.get('buscar');
         const factura = this.emojis.get('wallet');
         const estrella = this.emojis.get('estrellita');
-        const verificado = this.emojis.get('success');
 
         return [
             new TextDisplayBuilder().setContent(
                 `## ${iconoTitulo ? `${iconoTitulo} ` : ''}SHARE YOUR EXPERIENCE\n` +
-                `Tell us how your order went. We verify the purchase privately before publishing the review.\n` +
-                `-# Your product and invoice details are never shown in the public vouch.`
+                `Leave a verified review in under a minute.\n` +
+                `-# Your product and invoice details stay private.`
             ),
             ui.linea(),
             new TextDisplayBuilder().setContent([
-                `${abrir ? `${abrir} ` : ''}**1 · Open the review form**\nPress **${REVIEW_BUTTON_LABEL}** below to start.`,
-                `${factura ? `${factura} ` : ''}**2 · Verify your order**\nEnter the SellAuth invoice ID from a completed purchase.`,
-                `${estrella ? `${estrella} ` : ''}**3 · Rate your experience**\nChoose 1–5 stars and write a short, honest review.`,
-                `${verificado ? `${verificado} ` : ''}**4 · Publish as verified**\nValid invoices are accepted once; invalid or reused invoices are rejected automatically.`
-            ].join('\n\n')),
-            ui.linea(),
+                `${abrir ? `${abrir} ` : ''}**1 · Open** — Tap **${REVIEW_BUTTON_LABEL}**.`,
+                `${factura ? `${factura} ` : ''}**2 · Verify** — Enter your completed invoice ID.`,
+                `${estrella ? `${estrella} ` : ''}**3 · Review** — Choose 1–5 stars and write your feedback.`
+            ].join('\n')),
             new SectionBuilder()
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                    `**Ready to leave a verified review?**\n` +
-                    `-# It only takes a moment, and your purchase information stays private.`
+                    `**Ready?**\n` +
+                    `-# We verify the invoice privately before publishing.`
                 ))
                 .setButtonAccessory(
                     ui.boton(this.emojis, {
@@ -192,8 +176,7 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
 
     async enviarGuia(canal) {
         const mensaje = await canal.send({
-            // Components V2 permite TextDisplay/Separator/Section directamente
-            // en el mensaje. No hay ContainerBuilder y por tanto no aparece caja.
+            // Components V2 directamente en el mensaje: sin ContainerBuilder.
             components: this.construirGuiaPlana(),
             flags: ui.V2,
             allowedMentions: { parse: [] }
