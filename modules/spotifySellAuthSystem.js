@@ -78,21 +78,21 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
 
         await this.borrarGuiaAnterior(canal);
         await this.enviarGuia(canal);
-        logger.detalle('Review guide refresh: nuevo diseño aplicado.');
+        logger.detalle('Review guide refresh: nuevo diseño compacto aplicado.');
         return true;
     }
 
     construirResena(resena, avatarUrl = '') {
         const estrellas = estrellasReview(resena.rating);
         const cliente = resena.userId ? `<@${resena.userId}>` : 'Verified customer';
-        const origen = resena.source === 'sellauth' ? 'SellAuth review' : 'Verified invoice';
+        const verificado = this.emojis.rol('verificado') || this.emojis.get('success');
+        const feedbackIcon = this.emojis.rol('info') || this.emojis.get('reply');
 
-        // Sin accent color: el container sigue el lenguaje visual general del bot.
         const container = new ContainerBuilder();
         const cabecera =
-            `## ${this.emojis.rol('verificado')} Verified Customer Review\n` +
+            `### ${verificado ? `${verificado} ` : ''}Verified Customer Review\n` +
             `${estrellas}\n` +
-            `-# ${cliente} · ${origen} · ${ui.fecha(resena.createdAt, 'R')}`;
+            `-# ${cliente} · ${ui.fecha(resena.createdAt, 'R')}`;
 
         if (avatarUrl) {
             container.addSectionComponents(
@@ -104,12 +104,13 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
         }
 
-        // Lo publico se limita a la experiencia. Producto e invoice solo viven
-        // en View details.
+        // En publico solo mostramos la experiencia. Producto, invoice y demas
+        // informacion del pedido quedan exclusivamente en View details.
         container
             .addSeparatorComponents(ui.linea(false))
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `**Customer feedback**\n${ui.cita(ui.plano(resena.message))}`
+                `${feedbackIcon ? `${feedbackIcon} ` : ''}**Customer feedback**\n` +
+                `${ui.cita(ui.plano(resena.message))}`
             ));
 
         if (resena.reply) {
@@ -139,7 +140,7 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
                 ui.boton(this.emojis, {
                     id: 'sellauth:review-modal',
                     etiqueta: REVIEW_BUTTON_LABEL,
-                    estilo: 'primario',
+                    estilo: 'secundario',
                     emoji: 'anadir'
                 })
             ));
@@ -153,43 +154,30 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
     }
 
     construirGuiaPlana() {
-        const iconoTitulo = this.emojis.rol('valoracion') || this.emojis.rol('info');
+        const iconoTitulo = this.emojis.rol('valoracion') || this.emojis.get('notificacion');
+        const buscar = this.emojis.get('buscar');
+        const wallet = this.emojis.get('wallet');
+        const success = this.emojis.get('success');
 
         return [
             new TextDisplayBuilder().setContent(
-                `## ${iconoTitulo ? `${iconoTitulo} ` : ''}Customer Reviews\n` +
-                `Share your experience after a completed order.\n` +
-                `-# Purchase and invoice information is verified privately and never displayed in the public vouch.`
+                `### ${iconoTitulo ? `${iconoTitulo} ` : ''}Customer Reviews\n` +
+                `Verified feedback from completed Spotify Market orders.\n` +
+                `-# Product and invoice details remain private.`
             ),
             ui.linea(false),
             new TextDisplayBuilder().setContent(
-                `**1. Verify your purchase**\n` +
-                `Enter the invoice ID from your completed order.\n\n` +
-                `**2. Rate the experience**\n` +
-                `Choose from ⭐ to ⭐⭐⭐⭐⭐ and write a short review.\n\n` +
-                `**3. Publish**\n` +
-                `The bot validates the invoice once and publishes the verified review.`
-            ),
-            ui.aire(),
-            new SectionBuilder()
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                    `**Ready to share your experience?**\n` +
-                    `-# Completed invoices can be reviewed once.`
-                ))
-                .setButtonAccessory(
-                    ui.boton(this.emojis, {
-                        id: 'sellauth:review-modal',
-                        etiqueta: REVIEW_BUTTON_LABEL,
-                        estilo: 'primario',
-                        emoji: 'anadir'
-                    })
-                )
+                `${buscar ? `${buscar} ` : ''}**Open** · Use **Leave a review** on any vouch above.\n` +
+                `${wallet ? `${wallet} ` : ''}**Verify** · Enter the invoice ID from your completed order.\n` +
+                `⭐ **Rate** · Choose 1–5 stars and write your experience.\n` +
+                `${success ? `${success} ` : ''}**Publish** · The invoice is validated once before the review goes live.`
+            )
         ];
     }
 
     async enviarGuia(canal) {
         const mensaje = await canal.send({
-            // La guia permanece deliberadamente fuera de un container.
+            // Guia informativa compacta: el CTA vive dentro de cada vouch.
             components: this.construirGuiaPlana(),
             flags: ui.V2,
             allowedMentions: { parse: [] }
