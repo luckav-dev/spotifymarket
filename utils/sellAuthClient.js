@@ -33,6 +33,24 @@ function objetoConsulta(query = {}) {
     return params;
 }
 
+function retryAfterMsDe(respuesta, datos) {
+    const cabecera = String(respuesta.headers.get('retry-after') ?? '').trim();
+    if (cabecera) {
+        const segundos = Number(cabecera);
+        if (Number.isFinite(segundos) && segundos >= 0) return Math.ceil(segundos * 1000);
+
+        const fecha = Date.parse(cabecera);
+        if (Number.isFinite(fecha)) return Math.max(0, fecha - Date.now());
+    }
+
+    const mensaje = String(datos?.message ?? datos?.error ?? '');
+    const minutos = mensaje.match(/after\s+(\d+)\s+minute/i);
+    if (minutos) return Number(minutos[1]) * 60 * 1000;
+    const segundos = mensaje.match(/after\s+(\d+)\s+second/i);
+    if (segundos) return Number(segundos[1]) * 1000;
+    return 0;
+}
+
 class SellAuthClient {
     constructor({ apiKey, shopId, baseUrl = API_BASE, timeoutMs = 9000 } = {}) {
         this.apiKey = String(apiKey ?? '').trim();
@@ -88,15 +106,26 @@ class SellAuthClient {
         }
 
         if (!respuesta.ok) {
-            const retryAfter = Number(respuesta.headers.get('retry-after'));
-            const retryAfterMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 0;
-            const reintentable = respuesta.status === 429 || respuesta.status >= 500;
-            if (reintentable && intento < MAX_REINTENTOS) {
-                await esperar(Math.min(Math.max(retryAfterMs, 750 * (2 ** intento)), 5000));
+            const retryAfterMs = retryAfterMsDe(respuesta, datos);
+            const detalle = datos?.message ?? datos?.error ?? `HTTP ${respuesta.status}`;
+
+            // Un 429 nunca se reintenta aqui: volver a golpear la API antes de
+            // Retry-After solo alarga el bloqueo del shop. El caller decide
+            // cuando volver a intentarlo.
+            if (respuesta.status === 429) {
+                throw new SellAuthError(`SellAuth rechazo la solicitud: ${detalle}`, {
+                    status: respuesta.status,
+                    body: datos,
+                    retryAfterMs: Math.max(retryAfterMs, 60 * 1000)
+                });
+            }
+
+            // Solo reintentamos errores temporales del servidor, con backoff corto.
+            if (respuesta.status >= 500 && intento < MAX_REINTENTOS) {
+                await esperar(Math.min(750 * (2 ** intento), 5000));
                 return this.request(pathname, { method, query, body, intento: intento + 1 });
             }
 
-            const detalle = datos?.message ?? datos?.error ?? `HTTP ${respuesta.status}`;
             throw new SellAuthError(`SellAuth rechazo la solicitud: ${detalle}`, {
                 status: respuesta.status,
                 body: datos,
