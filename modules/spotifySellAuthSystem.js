@@ -13,6 +13,9 @@ const media = require('../utils/media');
 const ui = require('../utils/ui');
 
 const REVIEW_DETAILS_DELAY_MS = 1000;
+const SPOTIFY_GREEN = 0x1ED760;
+const DETAILS_BUTTON_LABEL = 'Purchase details';
+const REVIEW_BUTTON_LABEL = 'Leave a review';
 
 function esperar(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -22,13 +25,19 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
     async iniciar() {
         const resultado = await super.iniciar();
 
-        // Las reseñas que ya estaban publicadas también deben adoptar la nueva
-        // política de privacidad: el producto solo aparece en los detalles
-        // efímeros y nunca en el container público.
+        // Al arrancar aplicamos el nuevo estilo tanto a las reviews existentes
+        // como a la guia que ya estaba publicada en el canal.
         const timer = setTimeout(() => {
-            this.refrescarResenasPublicadas().catch(error =>
-                logger.error('sellauth:reviews', `No se pudieron refrescar las reseñas publicadas: ${error.message}`)
-            );
+            Promise.allSettled([
+                this.refrescarResenasPublicadas(),
+                this.refrescarGuiaPublicada()
+            ]).then(resultados => {
+                for (const resultadoRefresco of resultados) {
+                    if (resultadoRefresco.status === 'rejected') {
+                        logger.error('sellauth:reviews', resultadoRefresco.reason?.message || 'Review refresh failed');
+                    }
+                }
+            });
         }, 1500);
         timer.unref?.();
 
@@ -50,25 +59,32 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             }
         }
 
-        if (actualizadas) {
-            logger.detalle(`Reviews privacy refresh: ${actualizadas} reseña(s) actualizadas.`);
-        }
+        if (actualizadas) logger.detalle(`Reviews visual refresh: ${actualizadas} reseña(s) actualizadas.`);
         return actualizadas;
+    }
+
+    async refrescarGuiaPublicada() {
+        const canal = await this.canalResenas();
+        if (!canal) return false;
+
+        await this.borrarGuiaAnterior(canal);
+        await this.enviarGuia(canal);
+        logger.detalle('Review guide refresh: guia plana actualizada.');
+        return true;
     }
 
     construirResena(resena, avatarUrl = '') {
         const estrellas = Array.from({ length: resena.rating }, () => this.emojis.get('estrellita')).join(' ')
             || `${resena.rating}/5`;
         const cliente = resena.userId ? `<@${resena.userId}>` : 'Verified customer';
-        const referencia = resena.invoiceId
-            ? `#${String(resena.invoiceId).slice(-8)}`
-            : resena.sourceId ? `#${resena.sourceId}` : 'Verified';
 
-        const container = new ContainerBuilder();
+        // Excepcion visual solicitada: las reviews/vouches son los unicos
+        // containers del bot que usan accent color.
+        const container = new ContainerBuilder().setAccentColor(SPOTIFY_GREEN);
         const cabecera =
             `## ${this.emojis.rol('valoracion')} ${this.config.reviews.title}\n` +
             `${estrellas}\n` +
-            `-# ${resena.source === 'sellauth' ? 'Published through SellAuth' : 'Verified with a SellAuth invoice'}`;
+            `-# Verified purchase · ${resena.source === 'sellauth' ? 'Published through SellAuth' : 'Invoice verified by SellAuth'}`;
 
         if (avatarUrl) {
             container.addSectionComponents(
@@ -80,14 +96,14 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
         }
 
-        // Importante: el producto comprado NO se muestra públicamente. Se
-        // conserva en la base de datos y solo se revela tras View full details.
+        // Nada sensible de la compra se enseña en publico: ni producto ni
+        // referencia de factura. Ambos quedan para Purchase details.
         container
             .addSeparatorComponents(ui.linea())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${this.emojis.rol('verificado')} **Purchase:** Verified\n` +
                 `${this.emojis.rol('usuario')} **Customer:** ${cliente}\n` +
-                `${this.emojis.rol('verificado')} **Purchase:** ${ui.dato(referencia)}\n` +
-                `${this.emojis.rol('reloj')} **Date:** ${ui.fecha(resena.createdAt, 'f')}`
+                `${this.emojis.rol('reloj')} **Published:** ${ui.fecha(resena.createdAt, 'f')}`
             ))
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
@@ -98,7 +114,7 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             container
                 .addSeparatorComponents(ui.aire())
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                    `### ${this.emojis.rol('reply')} Store response\n${ui.cita(ui.plano(resena.reply))}`
+                    `### ${this.emojis.rol('reply')} Spotify Market response\n${ui.cita(ui.plano(resena.reply))}`
                 ));
         }
 
@@ -106,28 +122,31 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
         if (banner) {
             container
                 .addSeparatorComponents(ui.linea())
-                .addMediaGalleryComponents(ui.galeria([banner.url], 'Spotify Market verified review'));
+                .addMediaGalleryComponents(ui.galeria([banner.url], 'Spotify Market verified customer review'));
         }
 
         container
             .addSeparatorComponents(ui.linea())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `**Verified review**\n-# Purchase information is private. Open the details only when you need to verify it.`
+            ))
             .addActionRowComponents(ui.fila(
                 ui.boton(this.emojis, {
                     id: `sellauth:review-details:${resena.key}`,
-                    etiqueta: this.config.reviews.detailsButtonLabel,
+                    etiqueta: DETAILS_BUTTON_LABEL,
                     estilo: 'secundario',
                     emoji: 'buscar'
                 }),
                 ui.boton(this.emojis, {
                     id: 'sellauth:review-modal',
-                    etiqueta: this.config.reviews.buttonLabel,
-                    estilo: 'secundario',
+                    etiqueta: REVIEW_BUTTON_LABEL,
+                    estilo: 'exito',
                     emoji: 'anadir'
                 })
             ))
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `-# Spotify Market · Verified purchase · ${ui.fecha(resena.updatedAt || resena.createdAt, 'R')}`
+                `-# Spotify Market · Verified by SellAuth · ${ui.fecha(resena.updatedAt || resena.createdAt, 'R')}`
             ));
 
         return {
@@ -136,6 +155,57 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             flags: ui.V2,
             allowedMentions: { parse: [], users: resena.userId ? [resena.userId] : [] }
         };
+    }
+
+    construirGuiaPlana() {
+        const iconoTitulo = this.emojis.rol('info') || this.emojis.get('notificacion');
+        const abrir = this.emojis.get('buscar');
+        const factura = this.emojis.get('wallet');
+        const estrella = this.emojis.get('estrellita');
+        const verificado = this.emojis.get('success');
+
+        return [
+            new TextDisplayBuilder().setContent(
+                `## ${iconoTitulo ? `${iconoTitulo} ` : ''}SHARE YOUR EXPERIENCE\n` +
+                `Tell us how your order went. We verify the purchase privately before publishing the review.\n` +
+                `-# Your product and invoice details are never shown in the public vouch.`
+            ),
+            ui.linea(),
+            new TextDisplayBuilder().setContent([
+                `${abrir ? `${abrir} ` : ''}**1 · Open the review form**\nPress **${REVIEW_BUTTON_LABEL}** below to start.`,
+                `${factura ? `${factura} ` : ''}**2 · Verify your order**\nEnter the SellAuth invoice ID from a completed purchase.`,
+                `${estrella ? `${estrella} ` : ''}**3 · Rate your experience**\nChoose 1–5 stars and write a short, honest review.`,
+                `${verificado ? `${verificado} ` : ''}**4 · Publish as verified**\nValid invoices are accepted once; invalid or reused invoices are rejected automatically.`
+            ].join('\n\n')),
+            ui.linea(),
+            new SectionBuilder()
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                    `**Ready to leave a verified review?**\n` +
+                    `-# It only takes a moment, and your purchase information stays private.`
+                ))
+                .setButtonAccessory(
+                    ui.boton(this.emojis, {
+                        id: 'sellauth:review-modal',
+                        etiqueta: REVIEW_BUTTON_LABEL,
+                        estilo: 'exito',
+                        emoji: 'anadir'
+                    })
+                )
+        ];
+    }
+
+    async enviarGuia(canal) {
+        const mensaje = await canal.send({
+            // Components V2 permite TextDisplay/Separator/Section directamente
+            // en el mensaje. No hay ContainerBuilder y por tanto no aparece caja.
+            components: this.construirGuiaPlana(),
+            flags: ui.V2,
+            allowedMentions: { parse: [] }
+        });
+
+        this.db.data.guia = { canalId: canal.id, mensajeId: mensaje.id };
+        this.db.save();
+        return mensaje;
     }
 
     async detallesResena(interaction, key) {
@@ -149,13 +219,12 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
 
         const loadingIcon = this.emojis.get('loading');
         const loading = new ContainerBuilder()
+            .setAccentColor(SPOTIFY_GREEN)
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                 `${loadingIcon ? `${loadingIcon} ` : ''}**Loading purchase details...**\n` +
                 '-# Verifying the private review information.'
             ));
 
-        // Respuesta inmediata para que Discord no muestre solo "thinking...".
-        // Tras un segundo sustituimos este estado por los detalles reales.
         await ui.responderEfimero(interaction, loading);
         await esperar(REVIEW_DETAILS_DELAY_MS);
 
@@ -167,29 +236,29 @@ class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
             : resena.sourceId ? `#${resena.sourceId}` : 'Verified';
 
         const container = new ContainerBuilder()
+            .setAccentColor(SPOTIFY_GREEN)
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `## ${this.emojis.rol('valoracion')} Review details\n${estrellas}\n` +
-                '-# These purchase details are only visible to you.'
+                `## ${this.emojis.rol('valoracion')} Purchase details\n${estrellas}\n` +
+                '-# Private view · only visible to you'
             ))
             .addSeparatorComponents(ui.linea())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('producto')} Purchase details\n` +
                 `${this.emojis.rol('producto')} **Product:** ${ui.plano(resena.productName)}\n` +
                 `${this.emojis.rol('usuario')} **Customer:** ${cliente}\n` +
-                `${this.emojis.rol('verificado')} **Purchase:** ${ui.dato(referencia)}\n` +
+                `${this.emojis.rol('verificado')} **Invoice:** ${ui.dato(referencia)}\n` +
                 `${this.emojis.rol('verificado')} **Verification:** ${resena.source === 'sellauth' ? 'SellAuth feedback' : 'Verified SellAuth invoice'}\n` +
                 `${this.emojis.rol('reloj')} **Published:** ${ui.fecha(resena.createdAt, 'F')}`
             ))
             .addSeparatorComponents(ui.aire())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `### ${this.emojis.rol('info')} Customer feedback\n${ui.cita(ui.plano(resena.message))}`
+                `### ${this.emojis.rol('info')} Review\n${ui.cita(ui.plano(resena.message))}`
             ));
 
         if (resena.reply) {
             container
                 .addSeparatorComponents(ui.aire())
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                    `### ${this.emojis.rol('reply')} Store response\n${ui.cita(ui.plano(resena.reply))}`
+                    `### ${this.emojis.rol('reply')} Spotify Market response\n${ui.cita(ui.plano(resena.reply))}`
                 ));
         }
 
