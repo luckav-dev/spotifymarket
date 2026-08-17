@@ -1,6 +1,7 @@
 'use strict';
 
-const API_BASE = 'https://api.sellauth.com/v1';
+const SELLAUTH_API_BASE = 'https://api.sellauth.com/v1';
+const MARKET_API_BASE = 'https://spotifymarket.xyz/api/bot';
 const MAX_REINTENTOS = 2;
 
 class SellAuthError extends Error {
@@ -38,7 +39,6 @@ function retryAfterMsDe(respuesta, datos) {
     if (cabecera) {
         const segundos = Number(cabecera);
         if (Number.isFinite(segundos) && segundos >= 0) return Math.ceil(segundos * 1000);
-
         const fecha = Date.parse(cabecera);
         if (Number.isFinite(fecha)) return Math.max(0, fecha - Date.now());
     }
@@ -52,20 +52,31 @@ function retryAfterMsDe(respuesta, datos) {
 }
 
 class SellAuthClient {
-    constructor({ apiKey, shopId, baseUrl = API_BASE, timeoutMs = 9000 } = {}) {
-        this.apiKey = String(apiKey ?? '').trim();
+    constructor({ apiKey, shopId, baseUrl = SELLAUTH_API_BASE, timeoutMs = 12000 } = {}) {
+        const marketSecret = String(process.env.SPOTIFY_MARKET_API_SECRET ?? '').trim();
+        this.mode = marketSecret ? 'market' : 'sellauth';
+        this.apiKey = marketSecret || String(apiKey ?? '').trim();
         this.shopId = String(shopId ?? '').trim();
-        this.baseUrl = String(baseUrl || API_BASE).replace(/\/+$/, '');
+        this.baseUrl = this.mode === 'market'
+            ? String(process.env.SPOTIFY_MARKET_API_URL || MARKET_API_BASE).replace(/\/+$/, '')
+            : String(baseUrl || SELLAUTH_API_BASE).replace(/\/+$/, '');
         this.timeoutMs = timeoutMs;
     }
 
     configurado() {
+        if (this.mode === 'market') return Boolean(this.apiKey && /^https:\/\//i.test(this.baseUrl));
         return Boolean(this.apiKey && /^\d+$/.test(this.shopId));
     }
 
     async request(pathname, { method = 'GET', query, body, intento = 0 } = {}) {
-        if (!this.apiKey) throw new SellAuthError('Falta SELLAUTH_API_KEY en el entorno.');
-        if (!/^\d+$/.test(this.shopId)) throw new SellAuthError('Falta un SELLAUTH_SHOP_ID valido.');
+        if (!this.apiKey) {
+            throw new SellAuthError(this.mode === 'market'
+                ? 'Falta SPOTIFY_MARKET_API_SECRET en el entorno.'
+                : 'Falta SELLAUTH_API_KEY en el entorno.');
+        }
+        if (this.mode === 'sellauth' && !/^\d+$/.test(this.shopId)) {
+            throw new SellAuthError('Falta un SELLAUTH_SHOP_ID valido.');
+        }
 
         const url = new URL(`${this.baseUrl}/${String(pathname).replace(/^\/+/, '')}`);
         for (const [clave, valor] of objetoConsulta(query)) url.searchParams.append(clave, valor);
@@ -89,44 +100,37 @@ class SellAuthClient {
         } catch (error) {
             clearTimeout(temporizador);
             if (error.name === 'AbortError') {
-                throw new SellAuthError(`SellAuth no respondio en ${this.timeoutMs} ms.`);
+                throw new SellAuthError(`${this.mode === 'market' ? 'Spotify Market API' : 'SellAuth'} no respondio en ${this.timeoutMs} ms.`);
             }
-            throw new SellAuthError(`No se pudo conectar con SellAuth: ${error.message}`);
+            throw new SellAuthError(`No se pudo conectar con ${this.mode === 'market' ? 'Spotify Market API' : 'SellAuth'}: ${error.message}`);
         }
         clearTimeout(temporizador);
 
         const texto = await respuesta.text();
         let datos = null;
         if (texto) {
-            try {
-                datos = JSON.parse(texto);
-            } catch {
-                datos = texto;
-            }
+            try { datos = JSON.parse(texto); } catch { datos = texto; }
         }
 
         if (!respuesta.ok) {
             const retryAfterMs = retryAfterMsDe(respuesta, datos);
             const detalle = datos?.message ?? datos?.error ?? `HTTP ${respuesta.status}`;
+            const origen = this.mode === 'market' ? 'Spotify Market API' : 'SellAuth';
 
-            // Un 429 nunca se reintenta aqui: volver a golpear la API antes de
-            // Retry-After solo alarga el bloqueo del shop. El caller decide
-            // cuando volver a intentarlo.
             if (respuesta.status === 429) {
-                throw new SellAuthError(`SellAuth rechazo la solicitud: ${detalle}`, {
+                throw new SellAuthError(`${origen} rechazo la solicitud: ${detalle}`, {
                     status: respuesta.status,
                     body: datos,
                     retryAfterMs: Math.max(retryAfterMs, 60 * 1000)
                 });
             }
 
-            // Solo reintentamos errores temporales del servidor, con backoff corto.
             if (respuesta.status >= 500 && intento < MAX_REINTENTOS) {
                 await esperar(Math.min(750 * (2 ** intento), 5000));
                 return this.request(pathname, { method, query, body, intento: intento + 1 });
             }
 
-            throw new SellAuthError(`SellAuth rechazo la solicitud: ${detalle}`, {
+            throw new SellAuthError(`${origen} rechazo la solicitud: ${detalle}`, {
                 status: respuesta.status,
                 body: datos,
                 retryAfterMs
@@ -137,6 +141,7 @@ class SellAuthClient {
     }
 
     ruta(recurso = '') {
+        if (this.mode === 'market') return recurso || 'shop';
         return `shops/${this.shopId}/${recurso}`.replace(/\/$/, '');
     }
 
@@ -159,44 +164,22 @@ class SellAuthClient {
         return acumulado;
     }
 
-    listarProductos(query = {}) {
-        return this.request(this.ruta('products'), { query });
-    }
-
+    listarProductos(query = {}) { return this.request(this.ruta('products'), { query }); }
     todosLosProductos() {
-        return this.paginar('products', {
-            perPage: 100,
-            orderColumn: 'id',
-            orderDirection: 'asc'
-        });
+        return this.paginar('products', { perPage: 100, orderColumn: 'id', orderDirection: 'asc' });
     }
+    obtenerProducto(productId) { return this.request(this.ruta(`products/${encodeURIComponent(productId)}`)); }
+    listarFacturas(query = {}) { return this.request(this.ruta('invoices'), { query }); }
+    obtenerFactura(invoiceId) { return this.request(this.ruta(`invoices/${encodeURIComponent(invoiceId)}`)); }
+    listarResenas(query = {}) { return this.request(this.ruta('feedbacks'), { query }); }
+    obtenerResena(feedbackId) { return this.request(this.ruta(`feedbacks/${encodeURIComponent(feedbackId)}`)); }
+    estadisticasResenas(query = {}) { return this.request(this.ruta('feedbacks/stats'), { query }); }
+    obtenerTienda() { return this.request(this.ruta()); }
 
-    obtenerProducto(productId) {
-        return this.request(this.ruta(`products/${encodeURIComponent(productId)}`));
-    }
-
-    listarFacturas(query = {}) {
-        return this.request(this.ruta('invoices'), { query });
-    }
-
-    obtenerFactura(invoiceId) {
-        return this.request(this.ruta(`invoices/${encodeURIComponent(invoiceId)}`));
-    }
-
-    listarResenas(query = {}) {
-        return this.request(this.ruta('feedbacks'), { query });
-    }
-
-    obtenerResena(feedbackId) {
-        return this.request(this.ruta(`feedbacks/${encodeURIComponent(feedbackId)}`));
-    }
-
-    estadisticasResenas(query = {}) {
-        return this.request(this.ruta('feedbacks/stats'), { query });
-    }
-
-    obtenerTienda() {
-        return this.request(this.ruta());
+    async crearEnlaceFactura(invoiceId) {
+        if (this.mode !== 'market') return '';
+        const datos = await this.request(`order-link/${encodeURIComponent(invoiceId)}`);
+        return /^https:\/\//i.test(String(datos?.url ?? '')) ? String(datos.url) : '';
     }
 }
 
