@@ -3,9 +3,9 @@
   "assets": {
     "bannerPrincipal": "assets/brand/3d banner.png",
     "bannerCatalogo": "assets/brand/banner2.png",
-    "bannerAlternativo": "assets/embedded/vouch-banner.webp.b64",
-    "bannerVouch": "assets/embedded/vouch-banner.webp.b64",
-    "bannerTickets": "assets/embedded/tickets-banner.webp.b64",
+    "bannerAlternativo": "assets/brand/vouch-banner.png",
+    "bannerVouch": "assets/brand/vouch-banner.png",
+    "bannerTickets": "assets/brand/tickets-banner.png",
     "logo": "assets/brand/SpotifyMarket.png",
     "animacion": "assets/brand/spotify gif.gif"
   },
