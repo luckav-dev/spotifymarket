@@ -70,15 +70,30 @@ class SpotifyMarketCommerceSystem extends SpotifySellAuthSystem {
         });
         const nombre = arte.nombreArchivo(tipo, productoWeb);
         const archivo = new AttachmentBuilder(buffer, { name: nombre });
-        const precioAnterior = tipo === 'price'
-            ? `\n${this.emojis.rol('precio')} **Previous price:** ${arte.precio(anterior, productoWeb.moneda)}`
-            : '';
+
+        const detalles = [];
+        // En restocks y cambios de precio el nombre ya aparece en la imagen.
+        // Solo los avisos de producto nuevo pueden repetirlo en texto.
+        if (tipo === 'new') {
+            detalles.push(`${this.emojis.rol('producto')} **Product:** ${ui.plano(productoWeb.nombre)}`);
+        }
+        detalles.push(`${this.emojis.rol('precio')} **Price:** ${arte.precio(productoWeb.precio, productoWeb.moneda)}`);
+        if (tipo === 'price') {
+            detalles.push(`${this.emojis.rol('precio')} **Previous price:** ${arte.precio(anterior, productoWeb.moneda)}`);
+        }
+        detalles.push(
+            `${this.emojis.rol('stock')} **Available stock:** ${productoWeb.stock < 0 ? 'Available' : ui.dato(productoWeb.stock)}`
+        );
 
         const cta = tipo === 'price'
             ? (bajada ? 'Get the new price' : 'View updated price')
             : tipo === 'restock'
                 ? 'Buy now'
                 : 'View product';
+
+        const descripcionGaleria = tipo === 'new'
+            ? `${productoWeb.nombre} ${titulo}`
+            : `Spotify Market ${tipo === 'price' ? 'price update' : 'product restock'}`;
 
         const container = new ContainerBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(
@@ -87,19 +102,15 @@ class SpotifyMarketCommerceSystem extends SpotifySellAuthSystem {
                 `> ${descripcion}`
             ))
             .addSeparatorComponents(ui.linea())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-                `${this.emojis.rol('producto')} **Product:** ${ui.plano(productoWeb.nombre)}\n` +
-                `${this.emojis.rol('precio')} **Price:** ${arte.precio(productoWeb.precio, productoWeb.moneda)}${precioAnterior}\n` +
-                `${this.emojis.rol('stock')} **Available stock:** ${productoWeb.stock < 0 ? 'Available' : ui.dato(productoWeb.stock)}`
-            ))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(detalles.join('\n')))
             .addSeparatorComponents(ui.linea())
-            .addMediaGalleryComponents(ui.galeria([`attachment://${nombre}`], `${productoWeb.nombre} ${titulo}`))
+            .addMediaGalleryComponents(ui.galeria([`attachment://${nombre}`], descripcionGaleria))
             .addSeparatorComponents(ui.linea())
             .addSectionComponents(
                 new SectionBuilder()
                     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
                         `${this.emojis.rol('comprar')} **Continue on Spotify Market**\n` +
-                        `-# Open this product directly on spotifymarket.xyz to review the options and continue to checkout.`
+                        `-# Open the item directly on spotifymarket.xyz to review the options and continue to checkout.`
                     ))
                     .setButtonAccessory(
                         ui.boton(this.emojis, {
