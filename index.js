@@ -19,6 +19,8 @@ const ajustes = config.cargar('bot');
 
 /** Variables sin las que el bot no puede arrancar. */
 const REQUERIDAS = ['DISCORD_TOKEN', 'CLIENT_ID'];
+const WATCHDOG_INTERVAL_MS = 30_000;
+const WATCHDOG_MAX_NOT_READY_MS = 180_000;
 
 function comprobarEntorno() {
     const faltan = REQUERIDAS.filter(clave => !process.env[clave]?.trim());
@@ -86,7 +88,15 @@ function cargarEventos() {
 
     for (const archivo of archivos) {
         const evento = require(path.join(dir, archivo));
-        const handler = (...args) => evento.execute(...args, client);
+        const handler = (...args) => {
+            try {
+                Promise.resolve(evento.execute(...args, client)).catch(error =>
+                    logger.traza(`evento:${evento.name}`, error)
+                );
+            } catch (error) {
+                logger.traza(`evento:${evento.name}`, error);
+            }
+        };
 
         if (evento.once) client.once(evento.name, handler);
         else client.on(evento.name, handler);
@@ -110,6 +120,52 @@ async function desplegarComandos() {
 
 client.desplegarComandos = desplegarComandos;
 
+let apagando = false;
+let watchdog = null;
+let noReadyDesde = 0;
+
+function registrarDiagnosticoDiscord() {
+    client.on('error', error => logger.traza('discord:error', error));
+    client.on('warn', aviso => logger.warn('discord', aviso));
+    client.on('shardError', error => logger.traza('discord:shard', error));
+    client.on('shardDisconnect', (evento, shardId) => {
+        logger.warn('discord', `Shard ${shardId} desconectado (${evento?.code ?? 'sin codigo'}).`);
+    });
+    client.on('shardReconnecting', shardId => {
+        logger.warn('discord', `Shard ${shardId} reconectando...`);
+    });
+    client.on('shardResume', (shardId, eventosReproducidos) => {
+        logger.info('discord', `Shard ${shardId} reanudado · ${eventosReproducidos} eventos reproducidos.`);
+    });
+}
+
+function iniciarWatchdog() {
+    if (watchdog) clearInterval(watchdog);
+    noReadyDesde = 0;
+
+    watchdog = setInterval(() => {
+        if (apagando) return;
+
+        if (client.isReady()) {
+            noReadyDesde = 0;
+            return;
+        }
+
+        if (!noReadyDesde) {
+            noReadyDesde = Date.now();
+            return;
+        }
+
+        const desconectadoMs = Date.now() - noReadyDesde;
+        if (desconectadoMs < WATCHDOG_MAX_NOT_READY_MS) return;
+
+        logger.error('watchdog', `Discord lleva ${Math.round(desconectadoMs / 1000)} s sin estar listo. Forzando reinicio supervisado.`);
+        apagar('watchdog', 1);
+    }, WATCHDOG_INTERVAL_MS);
+
+    watchdog.unref?.();
+}
+
 async function arrancar() {
     logger.cabecera('Spotify Market', paquete.version, `discord.js ${versionDjs} · node ${process.version}`);
 
@@ -121,8 +177,11 @@ async function arrancar() {
     const eventos = cargarEventos();
     logger.paso('eventos', `${eventos} registrados`);
 
+    registrarDiagnosticoDiscord();
+
     try {
         await client.login(process.env.DISCORD_TOKEN);
+        iniciarWatchdog();
     } catch (error) {
         if (error.code === 'DisallowedIntents') {
             logger.error('conexion', 'Discord ha rechazado los intents privilegiados.');
@@ -136,36 +195,65 @@ async function arrancar() {
     }
 }
 
-/** Apagado limpio: sin esto se pierden las escrituras pendientes. */
-let apagando = false;
-
-function apagar(senal) {
+/**
+ * Apagado limpio. Los fallos fatales salen con codigo 1 para que systemd
+ * (Restart=on-failure/always) los levante de nuevo en vez de considerarlos
+ * una parada correcta.
+ */
+function apagar(senal, codigo = 0) {
     if (apagando) return;
     apagando = true;
+
+    if (watchdog) clearInterval(watchdog);
+    watchdog = null;
 
     logger.aire();
     logger.info('bot', `Recibido ${senal}, cerrando...`);
 
-    client.api?.detener();
-    client.sistemas?.sellauth?.detener();
+    const salidaForzada = setTimeout(() => process.exit(codigo), 10_000);
+    salidaForzada.unref?.();
 
-    Database.flushAll();
-    logger.ok('db', 'Datos volcados a disco');
+    try {
+        client.api?.detener();
+    } catch (error) {
+        logger.traza('apagado:api', error);
+    }
 
-    client.destroy();
-    logger.ok('bot', 'Desconectado');
+    try {
+        client.sistemas?.sellauth?.detener();
+    } catch (error) {
+        logger.traza('apagado:sellauth', error);
+    }
 
-    process.exit(0);
+    try {
+        Database.flushAll();
+        logger.ok('db', 'Datos volcados a disco');
+    } catch (error) {
+        logger.traza('apagado:db', error);
+    }
+
+    try {
+        client.destroy();
+        logger.ok('bot', 'Desconectado');
+    } catch (error) {
+        logger.traza('apagado:discord', error);
+    }
+
+    process.exit(codigo);
 }
 
 for (const senal of ['SIGINT', 'SIGTERM']) {
-    process.on(senal, () => apagar(senal));
+    process.on(senal, () => apagar(senal, 0));
 }
 
 process.on('unhandledRejection', error => logger.traza('unhandled', error));
+process.on('warning', warning => logger.traza('process:warning', warning));
 process.on('uncaughtException', error => {
     logger.traza('uncaught', error);
-    apagar('uncaughtException');
+    apagar('uncaughtException', 1);
 });
 
-arrancar();
+arrancar().catch(error => {
+    logger.traza('arranque:fatal', error);
+    apagar('startupFailure', 1);
+});
