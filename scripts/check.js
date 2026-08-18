@@ -56,16 +56,25 @@ const nombresEmoji = new Set(
         .filter(nombre => /\.(png|jpe?g|gif)$/i.test(nombre))
         .map(nombre => path.parse(nombre).name)
 );
-const cacheEmoji = JSON.parse(fs.readFileSync(path.join(RAIZ, 'emojis.json'), 'utf8'));
 const rolesEmoji = JSON.parse(fs.readFileSync(path.join(RAIZ, 'config', 'emojis.json'), 'utf8')).roles;
 
 for (const [rol, nombre] of Object.entries(rolesEmoji)) {
     if (!nombresEmoji.has(nombre)) fallo(`el rol de emoji '${rol}' apunta a '${nombre}', pero no existe su imagen`);
 }
-for (const nombre of nombresEmoji) {
-    if (!cacheEmoji[nombre]) fallo(`emojis/${nombre} no tiene entrada en emojis.json`);
+
+// emojis.json es la cache que genera el bot al arrancar: en un clon limpio no
+// existe todavia. Su ausencia no puede tumbar la verificacion, pero si esta
+// se comprueba que ninguna imagen se quedo sin subir.
+const rutaCache = path.join(RAIZ, 'emojis.json');
+if (fs.existsSync(rutaCache)) {
+    const cacheEmoji = JSON.parse(fs.readFileSync(rutaCache, 'utf8'));
+    for (const nombre of nombresEmoji) {
+        if (!cacheEmoji[nombre]) fallo(`emojis/${nombre} no tiene entrada en emojis.json`);
+    }
+    console.log(`ok emojis: ${nombresEmoji.size} imagenes, ${Object.keys(rolesEmoji).length} roles, cache sincronizada`);
+} else {
+    console.log(`ok emojis: ${nombresEmoji.size} imagenes, ${Object.keys(rolesEmoji).length} roles (cache aun no generada)`);
 }
-console.log(`ok emojis: ${nombresEmoji.size} imagenes, ${Object.keys(rolesEmoji).length} roles`);
 
 for (const archivo of js) {
     const contenido = fs.readFileSync(archivo, 'utf8');
