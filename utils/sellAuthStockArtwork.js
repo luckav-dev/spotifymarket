@@ -18,6 +18,20 @@ const RENDERER_VERSION = 'html-chromium-cdp-v7-premium-grid';
 
 let chromiumCache;
 let browserPromise = null;
+
+// Un Chromium ocioso son ~150 MB retenidos entre renders que pueden estar
+// separados por horas. Se cierra solo y se vuelve a abrir cuando haga falta.
+const CIERRE_POR_INACTIVIDAD_MS = 10 * 60 * 1000;
+let temporizadorInactividad = null;
+
+function posponerCierre(cerrar) {
+    if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+    temporizadorInactividad = setTimeout(() => {
+        temporizadorInactividad = null;
+        cerrar().catch(() => null);
+    }, CIERRE_POR_INACTIVIDAD_MS);
+    temporizadorInactividad.unref?.();
+}
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function esc(v) {
@@ -199,10 +213,17 @@ async function generarPanelesStock(productos, opciones = {}) {
         const html = pageHtml(pages[i], { all: visible, page: i + 1, pages: pages.length, title: opciones.title || 'Stock board', subtitle: opciones.subtitle || 'Current availability synchronized automatically from SellAuth.', lowStockThreshold: Number.isFinite(Number(opciones.lowStockThreshold)) ? Number(opciones.lowStockThreshold) : 3, updatedAt, font, logo });
         results.push({ pagina: i + 1, totalPaginas: pages.length, nombre: nombreArchivoStock(i + 1, pages.length), buffer: await render(html, pageHeight(pages[i].length)) });
     }
+    // Los renders pueden separarse horas: no tiene sentido dejar un Chromium
+    // ocupando memoria en medio. Se reprograma el cierre tras cada uso.
+    posponerCierre(cerrar);
     return results;
 }
 
 async function cerrar() {
+    if (temporizadorInactividad) {
+        clearTimeout(temporizadorInactividad);
+        temporizadorInactividad = null;
+    }
     if (!browserPromise) return;
     try { const b = await browserPromise; b.cdp.close(); b.process.kill('SIGTERM'); await sleep(100); fs.rmSync(b.dir, { recursive: true, force: true }); } catch {} finally { browserPromise = null; }
 }

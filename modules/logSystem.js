@@ -23,6 +23,9 @@ const MAX_CONTENIDO = 900;
  */
 const LIMITE_LOTE = 3600;
 
+/** Vida de una entrada de la cache de canales de log. */
+const CACHE_CANAL_MS = 5 * 60 * 1000;
+
 /**
  * Registro de eventos del servidor.
  *
@@ -36,6 +39,7 @@ class LogSystem {
         this.emojis = emojis;
         this.buffers = new Map();
         this.temporizadores = new Map();
+        this.canales = new Map();
     }
 
     get config() {
@@ -44,7 +48,14 @@ class LogSystem {
 
     // ---------------------------------------------------------------- destino
 
-    /** Canal donde va una categoria, con 'todos' como respaldo. */
+    /**
+     * Canal donde va una categoria, con 'todos' como respaldo.
+     *
+     * Con 32 listeners enganchados, resolver el canal en cada evento era hacer
+     * el mismo trabajo cientos de veces por minuto. Se cachea el canal ya
+     * resuelto y la entrada caduca sola, para que un cambio de config o un
+     * canal borrado se noten sin reiniciar.
+     */
     async canalDe(categoria) {
         const cfg = this.config;
         if (!cfg.activo) return null;
@@ -54,7 +65,27 @@ class LogSystem {
             : (cfg.canales[categoria] || cfg.canales.todos);
 
         if (!id) return null;
-        return this.client.channels.fetch(id).catch(() => null);
+
+        const cacheado = this.canales.get(id);
+        if (cacheado && Date.now() - cacheado.en < CACHE_CANAL_MS) return cacheado.canal;
+
+        const canal = await this.client.channels.fetch(id).catch(() => null);
+        this.canales.set(id, { canal, en: Date.now() });
+        return canal;
+    }
+
+    /** Registro de un cambio de configuracion hecho desde el dashboard. */
+    async configuracionEditada({ archivo, cambios, actor }) {
+        const quien = actor?.id ? `<@${actor.id}> · \`${actor.tag ?? actor.id}\`` : 'dashboard';
+        const lista = cambios.slice(0, 15).map(ruta => `- \`${ruta}\``).join('\n');
+        const resto = cambios.length > 15 ? `\n-# y ${cambios.length - 15} clave(s) mas` : '';
+
+        await this.enviar('servidor',
+            `${this.emojis.rol('ajustes')} **Configuracion editada** · \`config/${archivo}.json\`\n` +
+            `${this.emojis.get('hammer')} **Autor:** ${quien}\n` +
+            `${this.emojis.get('files')} **Claves modificadas:** ${cambios.length}\n${lista}${resto}\n` +
+            this.pie(archivo)
+        );
     }
 
     /** Los filtros se comprueban antes de construir nada. */

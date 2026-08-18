@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Este workflow no usa ninguna accion del marketplace a proposito.
+#
+# Los primeros intentos morian en 3-4 s sin runner asignado, sin ningun step
+# ejecutado y sin logs: esa es la firma de la comprobacion de politica de
+# Actions, que corre antes de asignar la maquina y rechaza el job entero cuando
+# el repositorio restringe que acciones pueden usarse. Haciendo el checkout con
+# git y usando el Node ya instalado en la imagen, el workflow funciona con la
+# politica mas restrictiva posible.
+#
+# El primer step de cada job es un preflight sin dependencias: si ese pasa y
+# falla algo posterior, el problema esta en el proyecto; si ni siquiera el
+# preflight llega a ejecutarse, Actions esta bloqueado a nivel de cuenta y no
+# hay nada que arreglar desde el repositorio.
+
+jobs:
+  bot:
+    name: Bot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight
+        run: |
+          echo "node $(node --version) · npm $(npm --version)"
+          echo "runner ${RUNNER_OS} ${RUNNER_ARCH}"
+
+      - name: Checkout
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin "${{ github.sha }}"
+          git checkout -q FETCH_HEAD
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+  dashboard:
+    name: Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight
+        run: |
+          echo "node $(node --version) · npm $(npm --version)"
+          echo "runner ${RUNNER_OS} ${RUNNER_ARCH}"
+
+      - name: Checkout
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin "${{ github.sha }}"
+          git checkout -q FETCH_HEAD
+
+      - name: Install
+        working-directory: dashboard
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        working-directory: dashboard
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: dashboard
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: dashboard
+        run: npm run build
+        env:
+          SESSION_SECRET: ci-placeholder-secret-de-32-caracteres-min
+          BOT_API_TOKEN: ci-placeholder-token-de-32-caracteres-minimo

@@ -47,10 +47,20 @@
       "Invalid or reused invoices are rejected automatically.",
       "A verified review keeps the purchase warranty attached to your order."
     ],
-    "validInvoiceStatuses": ["completed", "partially_completed"],
-    "publishedFeedbackStatuses": ["published"],
+    "validInvoiceStatuses": [
+      "completed",
+      "partially_completed"
+    ],
+    "publishedFeedbackStatuses": [
+      "published"
+    ],
     "requireDiscordMatchWhenAvailable": true,
-    "allowUnlinkedInvoices": true
+    "allowUnlinkedInvoices": true,
+    "resumen": {
+      "activo": true,
+      "titulo": "CUSTOMER SATISFACTION",
+      "minimoParaPublicar": 3
+    }
   },
   "announcements": {
     "mentionEveryone": true,
@@ -69,5 +79,38 @@
       "enabled": false,
       "title": "NEW PRODUCT"
     }
+  },
+  "clientes": {
+    "activo": true,
+    "avisarPorMd": true,
+    "niveles": [
+      {
+        "id": "customer",
+        "nombre": "Customer",
+        "roleId": "1416774392574119980",
+        "minimoCompras": 1,
+        "minimoGastado": 0
+      },
+      {
+        "id": "vip",
+        "nombre": "VIP",
+        "roleId": "",
+        "minimoCompras": 5,
+        "minimoGastado": 100
+      },
+      {
+        "id": "wholesale",
+        "nombre": "Wholesale",
+        "roleId": "",
+        "minimoCompras": 15,
+        "minimoGastado": 500
+      }
+    ]
+  },
+  "restockAlerts": {
+    "activo": true,
+    "botonEtiqueta": "Notify me",
+    "maxSuscripcionesPorUsuario": 15,
+    "maxAvisosPorTanda": 40
   }
 }

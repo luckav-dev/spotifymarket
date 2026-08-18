@@ -23,7 +23,12 @@ const STOCK_SCHEMA = {
     lastError: ''
 };
 
-const CUSTOMER_ROLE_ID = '1416774392574119980';
+/** Suscripciones de restock y compras acumuladas por cliente. */
+const CLIENTES_SCHEMA = {
+    suscripciones: {},
+    compras: {},
+    facturasContadas: {}
+};
 
 function cantidadFactura(factura) {
     const items = Array.isArray(factura?.items) ? factura.items : [];
@@ -44,6 +49,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
     constructor(client, emojis) {
         super(client, emojis);
         this.stockDb = new Database('sellauth-stock-panel', STOCK_SCHEMA);
+        this.clientesDb = new Database('sellauth-clientes', CLIENTES_SCHEMA);
         this.actualizandoStock = null;
     }
 
@@ -110,54 +116,221 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         return super.publicarResena(resena, opciones);
     }
 
-    async darRolCustomerDesdeFactura(factura) {
+    // ------------------------------------------------------- niveles de cliente
+
+    /** Compras y gasto acumulado de un usuario de Discord. */
+    historialDe(discordId) {
+        return this.clientesDb.data.compras[discordId] ?? { compras: 0, gastado: 0, ultimaEn: 0 };
+    }
+
+    /** Nivel mas alto que alcanza un historial, o null si no llega a ninguno. */
+    nivelPara(historial) {
+        const niveles = this.config.clientes?.niveles ?? [];
+        return niveles
+            .filter(nivel => nivel.roleId
+                && historial.compras >= Number(nivel.minimoCompras ?? 0)
+                && historial.gastado >= Number(nivel.minimoGastado ?? 0))
+            .sort((a, b) => Number(b.minimoCompras ?? 0) - Number(a.minimoCompras ?? 0))[0] ?? null;
+    }
+
+    /**
+     * Registra la compra y ajusta los roles del cliente.
+     *
+     * Sustituye al rol unico que estaba hardcodeado en el codigo: los niveles,
+     * sus umbrales y sus roles viven ahora en config/sellauth.json, asi que
+     * anadir un tramo VIP no toca ni una linea.
+     */
+    async aplicarNivelDesdeFactura(factura) {
+        const ajustes = this.config.clientes ?? {};
+        if (!ajustes.activo) return false;
         if (String(factura?.status ?? '').toLowerCase() !== 'completed') return false;
 
         const discordId = SellAuthSystem.extraerDiscordId?.(factura) || '';
         if (!discordId) {
-            logger.detalle(`Factura ${factura?.id ?? '?'} completada sin Discord vinculado; no se asigna Customer.`);
+            logger.detalle(`Factura ${factura?.id ?? '?'} completada sin Discord vinculado; no se asigna nivel.`);
             return false;
         }
 
-        const guilds = [];
-        const guildId = process.env.GUILD_ID?.trim();
-        if (guildId) {
-            const guild = await this.client.guilds.fetch(guildId).catch(() => null);
-            if (guild) guilds.push(guild);
+        // Una factura solo suma una vez, por si el webhook llega repetido.
+        const facturaId = String(factura.id ?? factura.unique_id ?? '');
+        if (facturaId && this.clientesDb.data.facturasContadas[facturaId]) {
+            logger.detalle(`Factura ${facturaId} ya contabilizada para ${discordId}.`);
         } else {
-            guilds.push(...this.client.guilds.cache.values());
+            const historial = this.historialDe(discordId);
+            const total = Number(factura.total ?? factura.amount ?? 0);
+
+            this.clientesDb.data.compras[discordId] = {
+                compras: historial.compras + 1,
+                gastado: historial.gastado + (Number.isFinite(total) ? total : 0),
+                ultimaEn: Date.now()
+            };
+            if (facturaId) this.clientesDb.data.facturasContadas[facturaId] = Date.now();
+            this.clientesDb.flush();
         }
 
-        for (const guild of guilds) {
-            const miembro = await guild.members.fetch(discordId).catch(() => null);
-            if (!miembro) continue;
+        const historial = this.historialDe(discordId);
+        const objetivo = this.nivelPara(historial);
+        if (!objetivo) return false;
 
-            if (miembro.roles.cache.has(CUSTOMER_ROLE_ID)) {
-                logger.detalle(`Customer ya asignado a ${miembro.user.tag} (${discordId}).`);
-                return true;
-            }
+        const guild = await this.guildDeClientes();
+        if (!guild) return false;
 
-            const rol = await guild.roles.fetch(CUSTOMER_ROLE_ID).catch(() => null);
-            if (!rol) {
-                logger.warn('sellauth:customer', `No existe el rol Customer ${CUSTOMER_ROLE_ID} en ${guild.name}.`);
-                return false;
-            }
-
-            try {
-                await miembro.roles.add(rol, `SellAuth purchase completed · invoice ${factura?.id ?? 'unknown'}`);
-                logger.ok('sellauth:customer', `Rol Customer asignado a ${miembro.user.tag} (${discordId}) por factura ${factura?.id ?? '?'}.`);
-                return true;
-            } catch (error) {
-                logger.error(
-                    'sellauth:customer',
-                    `No se pudo asignar Customer a ${miembro.user.tag} (${discordId}): ${error.message}`
-                );
-                return false;
-            }
+        const miembro = await guild.members.fetch(discordId).catch(() => null);
+        if (!miembro) {
+            logger.warn('sellauth:clientes', `Discord ${discordId} compro, pero no esta en el servidor.`);
+            return false;
         }
 
-        logger.warn('sellauth:customer', `Discord ${discordId} compro, pero no se encontro como miembro del servidor.`);
-        return false;
+        if (miembro.roles.cache.has(objetivo.roleId)) return true;
+
+        const rol = await guild.roles.fetch(objetivo.roleId).catch(() => null);
+        if (!rol) {
+            logger.warn('sellauth:clientes', `El rol ${objetivo.roleId} del nivel '${objetivo.id}' no existe en ${guild.name}.`);
+            return false;
+        }
+
+        try {
+            await miembro.roles.add(rol, `Nivel ${objetivo.nombre} · ${historial.compras} compra(s)`);
+            logger.ok('sellauth:clientes', `${miembro.user.tag} sube a ${objetivo.nombre} (${historial.compras} compras).`);
+        } catch (error) {
+            logger.error('sellauth:clientes', `No se pudo dar ${objetivo.nombre} a ${miembro.user.tag}: ${error.message}`);
+            return false;
+        }
+
+        // Los niveles inferiores se retiran para que el rol visible sea uno solo.
+        for (const nivel of this.config.clientes.niveles ?? []) {
+            if (nivel.id === objetivo.id || !nivel.roleId) continue;
+            if (!miembro.roles.cache.has(nivel.roleId)) continue;
+            if (Number(nivel.minimoCompras ?? 0) >= Number(objetivo.minimoCompras ?? 0)) continue;
+            await miembro.roles.remove(nivel.roleId, `Sustituido por ${objetivo.nombre}`).catch(() => null);
+        }
+
+        if (ajustes.avisarPorMd) {
+            await miembro.send({
+                components: [ui.panel(this.emojis, {
+                    emoji: 'cliente',
+                    titulo: `You are now ${objetivo.nombre}`,
+                    cuerpo: [
+                        `Thanks for shopping with Spotify Market. Your account has been upgraded.`,
+                        ui.campos(this.emojis, [
+                            { emoji: 'comprar', etiqueta: 'Purchases', valor: String(historial.compras), codigo: true },
+                            { emoji: 'rango', etiqueta: 'Tier', valor: objetivo.nombre }
+                        ])
+                    ],
+                    pie: 'Your tier is updated automatically after every completed order.'
+                })],
+                flags: ui.V2,
+                allowedMentions: { parse: [] }
+            }).catch(() => null);
+        }
+
+        return true;
+    }
+
+    async guildDeClientes() {
+        const guildId = process.env.GUILD_ID?.trim();
+        if (guildId) return this.client.guilds.fetch(guildId).catch(() => null);
+        return this.client.guilds.cache.first() ?? null;
+    }
+
+    // ------------------------------------------------------- avisos de restock
+
+    /**
+     * Suscripcion a un producto agotado.
+     *
+     * El aviso general con @everyone sirve para el escaparate, pero quien
+     * espera un producto concreto quiere que le avisen a el y no enterarse por
+     * un ping que ademas molesta a todos los demas.
+     */
+    async alternarSuscripcion(interaction, productoId) {
+        const ajustes = this.config.restockAlerts ?? {};
+        if (!ajustes.activo) {
+            return ui.responderEfimero(interaction, ui.info(this.emojis, 'Restock alerts are currently disabled.'));
+        }
+
+        const producto = this.productos().find(item => item.id === productoId);
+        if (!producto) {
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'That product is no longer available.'));
+        }
+
+        const suscritos = this.clientesDb.data.suscripciones[productoId] ?? [];
+        const usuarioId = interaction.user.id;
+
+        if (suscritos.includes(usuarioId)) {
+            this.clientesDb.data.suscripciones[productoId] = suscritos.filter(id => id !== usuarioId);
+            if (!this.clientesDb.data.suscripciones[productoId].length) {
+                delete this.clientesDb.data.suscripciones[productoId];
+            }
+            this.clientesDb.save();
+            return ui.responderEfimero(interaction, ui.info(this.emojis,
+                `You will no longer be notified about **${ui.plano(producto.nombre)}**.`));
+        }
+
+        const total = Object.values(this.clientesDb.data.suscripciones)
+            .filter(lista => lista.includes(usuarioId)).length;
+        const maximo = Number(ajustes.maxSuscripcionesPorUsuario) || 15;
+        if (total >= maximo) {
+            return ui.responderEfimero(interaction, ui.aviso(this.emojis,
+                `You are already following ${maximo} products. Remove one before adding another.`));
+        }
+
+        this.clientesDb.data.suscripciones[productoId] = [...suscritos, usuarioId];
+        this.clientesDb.save();
+
+        return ui.responderEfimero(interaction, ui.exito(this.emojis,
+            `You will get a direct message as soon as **${ui.plano(producto.nombre)}** is back in stock.`));
+    }
+
+    /** Avisa por MD a quien seguia un producto que acaba de reponerse. */
+    async avisarSuscriptores(producto) {
+        const ajustes = this.config.restockAlerts ?? {};
+        if (!ajustes.activo) return 0;
+
+        const suscritos = this.clientesDb.data.suscripciones[producto.id] ?? [];
+        if (!suscritos.length) return 0;
+
+        // La lista se vacia antes de enviar: si algo falla a mitad, nadie
+        // recibe el mismo aviso dos veces al siguiente ciclo de sincronizacion.
+        delete this.clientesDb.data.suscripciones[producto.id];
+        this.clientesDb.flush();
+
+        const carga = {
+            components: [ui.panel(this.emojis, {
+                emoji: 'stock',
+                titulo: 'Back in stock',
+                cuerpo: [
+                    `**${ui.plano(producto.nombre)}** is available again.`,
+                    ui.campos(this.emojis, [
+                        { emoji: 'precio', etiqueta: 'Price', valor: arte.precio(producto.precio, producto.moneda) },
+                        { emoji: 'stock', etiqueta: 'Available', valor: producto.stock < 0 ? 'Unlimited' : String(producto.stock), codigo: true }
+                    ])
+                ],
+                acciones: producto.checkoutUrl
+                    ? [ui.fila(ui.boton(this.emojis, {
+                        url: producto.checkoutUrl, etiqueta: 'View product', estilo: 'enlace', emoji: 'enlace'
+                    }))]
+                    : [],
+                pie: 'You asked to be notified about this product. You will not get another alert unless you follow it again.'
+            })],
+            flags: ui.V2,
+            allowedMentions: { parse: [] }
+        };
+
+        let enviados = 0;
+        for (const usuarioId of suscritos.slice(0, Number(ajustes.maxAvisosPorTanda) || 40)) {
+            const usuario = await this.client.users.fetch(usuarioId).catch(() => null);
+            if (!usuario) continue;
+            const ok = await usuario.send(carga).then(() => true).catch(() => false);
+            if (ok) enviados += 1;
+        }
+
+        if (enviados) logger.detalle(`Restock de ${producto.nombre}: ${enviados} aviso(s) enviados.`);
+        return enviados;
+    }
+
+    async handle(interaction, accion, datos) {
+        if (accion === 'seguir') return this.alternarSuscripcion(interaction, datos.join(':'));
+        return super.handle(interaction, accion, datos);
     }
 
     detener() {
@@ -282,11 +455,11 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             if (evento === 'NOTIFICATION.SHOP_INVOICE_PROCESSED' && datos.invoice_id) {
                 try {
                     const factura = await this.api.obtenerFactura(datos.invoice_id);
-                    await this.darRolCustomerDesdeFactura(factura);
+                    await this.aplicarNivelDesdeFactura(factura);
                 } catch (error) {
                     logger.error(
-                        'sellauth:customer',
-                        `No se pudo comprobar la factura ${datos.invoice_id} para Customer: ${error.message}`
+                        'sellauth:clientes',
+                        `No se pudo comprobar la factura ${datos.invoice_id}: ${error.message}`
                     );
                 }
             }
@@ -315,6 +488,11 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         if (!canal?.isTextBased?.()) {
             logger.warn('sellauth:avisos', `El canal ${canalId} no existe o no admite mensajes.`);
             return null;
+        }
+
+        if (tipo === 'restock') {
+            await this.avisarSuscriptores(producto).catch(error =>
+                logger.warn('sellauth:restock', `No se pudo avisar a los suscriptores: ${error.message}`));
         }
 
         const bajada = tipo === 'price' && Number(producto.precio) < Number(anterior);

@@ -1,0 +1,9 @@
+{
+  "activo": true,
+  "titulo": "COMMUNITY POLL",
+  "maximoOpciones": 6,
+  "duracionMaximaMs": 2592000000,
+  "permitirCambiarVoto": true,
+  "mostrarResultadosEnVivo": true,
+  "textoCerrada": "This poll is closed. Thanks for voting."
+}

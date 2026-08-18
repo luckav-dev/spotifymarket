@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "check": "node scripts/check.js && node scripts/check-sellauth.js",
-    "test": "npm run check"
+    "test": "npm run check && npm run unit",
+    "unit": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=22.0.0"

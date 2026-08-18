@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 const logger = require('./logger');
@@ -49,6 +50,7 @@ class Database {
         this.porDefecto = porDefecto;
         this.sucio = false;
         this.temporizador = null;
+        this.cola = Promise.resolve();
 
         fs.mkdirSync(DIR, { recursive: true });
         this.data = this.#cargar();
@@ -86,6 +88,19 @@ class Database {
         fs.renameSync(tmp, this.ruta);
     }
 
+    /**
+     * Igual que #escribir, pero sin bloquear el bucle de eventos.
+     *
+     * Serializar y escribir un JSON de varios MB con writeFileSync paraba el
+     * bot entero cada pocos segundos: mientras dura, no se atiende ninguna
+     * interaccion. Este es el camino normal; el sincrono queda para el apagado.
+     */
+    async #escribirAsync(datos) {
+        const tmp = `${this.ruta}.tmp`;
+        await fsp.writeFile(tmp, JSON.stringify(datos, null, 2), 'utf8');
+        await fsp.rename(tmp, this.ruta);
+    }
+
     /** Marca sucio y programa el volcado. No bloquea. */
     save() {
         this.sucio = true;
@@ -93,9 +108,35 @@ class Database {
 
         this.temporizador = setTimeout(() => {
             this.temporizador = null;
-            this.flush();
+            this.flushAsync().catch(error =>
+                logger.error(`db:${this.nombre}`, `Error guardando: ${error.message}`)
+            );
         }, RETRASO_GUARDADO_MS);
         this.temporizador.unref?.();
+    }
+
+    /**
+     * Volcado asincrono, encolado.
+     *
+     * La cola evita que dos guardados solapados se pisen el archivo temporal:
+     * ambos usan la misma ruta .tmp y el rename del primero podria llevarse el
+     * contenido a medio escribir del segundo.
+     */
+    flushAsync() {
+        this.cola = this.cola.then(async () => {
+            if (!this.sucio) return;
+            // Se marca antes de escribir: cualquier mutacion que llegue durante
+            // la escritura vuelve a ensuciar y provoca otro volcado.
+            this.sucio = false;
+            try {
+                await this.#escribirAsync(this.data);
+            } catch (error) {
+                this.sucio = true;
+                throw error;
+            }
+        }, () => {});
+
+        return this.cola;
     }
 
     /**
@@ -109,6 +150,61 @@ class Database {
             this.sucio = false;
         } catch (error) {
             logger.error(`db:${this.nombre}`, `Error guardando: ${error.message}`);
+        }
+    }
+
+    /**
+     * Recorta una coleccion que crece sin fin.
+     *
+     * Los tickets archivados, las valoraciones y las resenas no dejan de
+     * acumularse, y como el archivo se reescribe entero en cada guardado, el
+     * coste de cada escritura sube con el historico. Lo que se poda se guarda
+     * antes en un archivo mensual, asi no se pierde nada.
+     *
+     * @param {string} clave     Propiedad de data a podar (objeto o array).
+     * @param {number} conservar Cuantos elementos recientes se quedan.
+     * @param {(item: any) => number} fecha  Extrae la marca de tiempo del elemento.
+     */
+    podar(clave, conservar, fecha = item => Number(item?.fecha ?? item?.creadoEn ?? 0)) {
+        const valor = this.data[clave];
+        const esArray = Array.isArray(valor);
+        const entradas = esArray
+            ? valor.map((item, indice) => [String(indice), item])
+            : Object.entries(valor ?? {});
+
+        if (entradas.length <= conservar) return 0;
+
+        entradas.sort((a, b) => fecha(b[1]) - fecha(a[1]));
+        const sobrantes = entradas.slice(conservar);
+
+        this.#archivar(clave, sobrantes.map(([, item]) => item));
+
+        if (esArray) {
+            this.data[clave] = entradas.slice(0, conservar).map(([, item]) => item);
+        } else {
+            for (const [id] of sobrantes) delete this.data[clave][id];
+        }
+
+        this.save();
+        logger.detalle(`db:${this.nombre} · ${sobrantes.length} entrada(s) de '${clave}' movidas al historico`);
+        return sobrantes.length;
+    }
+
+    /** Vuelca lo podado a database/historico/<dominio>-<clave>-<mes>.json */
+    #archivar(clave, items) {
+        if (!items.length) return;
+
+        try {
+            const dir = path.join(DIR, 'historico');
+            fs.mkdirSync(dir, { recursive: true });
+
+            const mes = new Date().toISOString().slice(0, 7);
+            const ruta = path.join(dir, `${this.nombre}-${clave}-${mes}.json`);
+            const previo = fs.existsSync(ruta) ? JSON.parse(fs.readFileSync(ruta, 'utf8')) : [];
+
+            fs.writeFileSync(ruta, JSON.stringify([...previo, ...items], null, 2), 'utf8');
+        } catch (error) {
+            logger.error(`db:${this.nombre}`, `No se pudo archivar '${clave}': ${error.message}`);
         }
     }
 

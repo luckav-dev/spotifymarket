@@ -243,6 +243,32 @@ class ShopSystem {
                 )
         );
 
+        // Un producto agotado no puede ser un callejon sin salida: si el aviso
+        // de restock esta activo, aqui es donde el cliente pide que le avisen.
+        const avisos = this.client.sistemas?.sellauth;
+        if (agotado && avisos?.alternarSuscripcion && avisos.config?.restockAlerts?.activo) {
+            const sigue = (avisos.clientesDb?.data.suscripciones?.[p.id] ?? []).length;
+            c.addSeparatorComponents(ui.aire());
+            c.addSectionComponents(
+                new SectionBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `${this.emojis.rol('suscripcion')} **Get notified**\n` +
+                            `-# We will send you a direct message the moment this product is back` +
+                            `${sigue ? ` · ${sigue} member(s) already waiting` : ''}.`
+                        )
+                    )
+                    .setButtonAccessory(
+                        ui.boton(this.emojis, {
+                            id: `sellauth:seguir:${p.id}`,
+                            etiqueta: avisos.config.restockAlerts.botonEtiqueta || 'Notify me',
+                            estilo: 'secundario',
+                            emoji: 'suscripcion'
+                        })
+                    )
+            );
+        }
+
         // El contador como boton deshabilitado en el centro: asi no hay que
         // meterlo en el texto y no se desalinea al cambiar de pagina.
         c.addActionRowComponents(
@@ -545,6 +571,11 @@ class ShopSystem {
     }
 
     async comprar(interaction, productoId) {
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.reply({ components: [mantenimiento], flags: ui.V2_EFIMERO });
+        }
+
         const producto = this.visibles().find(item => item.id === productoId);
 
         if (!producto || !producto.visible) {

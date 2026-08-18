@@ -89,11 +89,24 @@ function validarEmojis(datos, r) {
 
 function validarPermissions(datos, r) {
     r.error(!objeto(datos.roles) || !Object.keys(datos.roles ?? {}).length, 'roles tiene que contener al menos un nivel de staff.');
+    const vistos = new Map();
     for (const [clave, rol] of Object.entries(datos.roles ?? {})) {
         r.error(!objeto(rol), `roles.${clave} tiene que ser un objeto.`);
         if (!objeto(rol)) continue;
         validarId(r, rol.roleId, `roles.${clave}.roleId`, { obligatorio: true });
         r.error(!Number.isFinite(rol.nivel) || rol.nivel < 0, `roles.${clave}.nivel tiene que ser un numero positivo.`);
+
+        // Dos entradas con el mismo rol no son un error, pero casi siempre son
+        // un descuido: nivelDe() coge el maximo, asi que el nivel mas bajo de
+        // los dos no se aplica nunca y el permiso queda mas abierto de lo que
+        // parece leyendo el archivo.
+        if (!rol.roleId) continue;
+        const previo = vistos.get(rol.roleId);
+        if (previo) {
+            r.aviso(true, `roles.${clave} y roles.${previo} comparten el roleId ${rol.roleId}: solo se aplicara el nivel mas alto.`);
+        } else {
+            vistos.set(rol.roleId, clave);
+        }
     }
     r.error(!objeto(datos.permisos), 'permisos tiene que ser un objeto.');
     for (const [clave, nivel] of Object.entries(datos.permisos ?? {})) {
@@ -323,6 +336,21 @@ function validarSellAuth(datos, r) {
         'shopId esta vacio en config; puedes definirlo con SELLAUTH_SHOP_ID en el .env.');
     r.error(datos.storefrontUrl && !/^https:\/\/[^\s]+$/i.test(datos.storefrontUrl),
         'storefrontUrl tiene que ser una URL https o quedarse vacia.');
+    // Sin storefrontUrl, urlProducto() devuelve cadena vacia y todos los avisos
+    // de restock y de precio salen sin el boton para ver el producto.
+    r.aviso(datos.enabled && !texto(datos.storefrontUrl),
+        'storefrontUrl esta vacio: los avisos de restock y precio se publicaran sin el boton "View product".');
+
+    for (const [indice, nivel] of (datos.clientes?.niveles ?? []).entries()) {
+        r.error(!objeto(nivel), `clientes.niveles[${indice}] tiene que ser un objeto.`);
+        if (!objeto(nivel)) continue;
+        r.error(!texto(nivel.id), `clientes.niveles[${indice}].id es obligatorio.`);
+        validarId(r, nivel.roleId, `clientes.niveles[${indice}].roleId`);
+        r.error(!Number.isFinite(nivel.minimoCompras) || nivel.minimoCompras < 0,
+            `clientes.niveles[${indice}].minimoCompras tiene que ser un numero positivo.`);
+        r.aviso(datos.clientes?.activo && !nivel.roleId,
+            `clientes.niveles[${indice}] ('${nivel.id}') no tiene roleId: ese nivel nunca se asignara.`);
+    }
     r.error(!texto(datos.productPathTemplate)
         || !datos.productPathTemplate.includes('{storefrontUrl}')
         || !datos.productPathTemplate.includes('{path}'),
@@ -407,6 +435,81 @@ function validarSuggestions(datos, r) {
     }
 }
 
+function validarMantenimiento(datos, r) {
+    r.error(!texto(datos.titulo), 'titulo es obligatorio.');
+    r.error(!texto(datos.descripcion) && !texto(datos.mensajeCorto), 'hace falta descripcion o mensajeCorto.');
+    validarId(r, datos.avisarEnCanalId, 'avisarEnCanalId');
+    r.error(datos.excepciones && !Number.isFinite(datos.excepciones.nivelMinimoStaff),
+        'excepciones.nivelMinimoStaff tiene que ser un numero.');
+}
+
+function validarAutomod(datos, r) {
+    r.error(typeof datos.activo !== 'boolean', 'activo tiene que ser booleano.');
+    validarId(r, datos.canalRegistroId, 'canalRegistroId');
+
+    for (const canal of datos.ignorar?.canales ?? []) validarId(r, canal, 'ignorar.canales[]');
+    for (const rol of datos.ignorar?.roles ?? []) validarId(r, rol, 'ignorar.roles[]');
+
+    const acciones = new Set(['borrar', 'timeout', 'aviso']);
+    for (const [nombre, filtro] of Object.entries(datos.filtros ?? {})) {
+        r.error(!objeto(filtro), `filtros.${nombre} tiene que ser un objeto.`);
+        if (!objeto(filtro)) continue;
+        r.error(filtro.accion !== undefined && !acciones.has(filtro.accion),
+            `filtros.${nombre}.accion tiene que ser borrar, timeout o aviso.`);
+        r.error(filtro.duracionTimeoutMs !== undefined
+            && (!Number.isFinite(filtro.duracionTimeoutMs) || filtro.duracionTimeoutMs > 28 * 86400000),
+            `filtros.${nombre}.duracionTimeoutMs tiene que ser un numero y Discord no admite mas de 28 dias.`);
+    }
+
+    // Un patron mal escrito solo se descubriria cuando alguien lo dispara.
+    for (const patron of datos.filtros?.estafas?.patrones ?? []) {
+        try {
+            new RegExp(patron);
+        } catch (error) {
+            r.error(true, `filtros.estafas.patrones contiene una expresion invalida (${patron}): ${error.message}`);
+        }
+    }
+
+    const raid = datos.antiRaid ?? {};
+    validarId(r, raid.canalAvisoId, 'antiRaid.canalAvisoId');
+    validarId(r, raid.mencionarRolId, 'antiRaid.mencionarRolId');
+    r.error(raid.entradasPorVentana !== undefined && (!Number.isFinite(raid.entradasPorVentana) || raid.entradasPorVentana < 2),
+        'antiRaid.entradasPorVentana tiene que ser un numero mayor que 1.');
+    r.error(raid.accion !== undefined && !['verificacion', 'expulsar'].includes(raid.accion),
+        'antiRaid.accion tiene que ser verificacion o expulsar.');
+}
+
+function validarSorteos(datos, r) {
+    r.error(!texto(datos.titulo), 'titulo es obligatorio.');
+    r.error(!texto(datos.botonParticipar), 'botonParticipar es obligatorio.');
+    r.error(datos.botonParticipar?.length > 80, 'botonParticipar supera los 80 caracteres de una etiqueta de boton.');
+    r.error(!Number.isFinite(datos.maximoGanadores) || datos.maximoGanadores < 1,
+        'maximoGanadores tiene que ser un numero mayor que 0.');
+    r.error(!Number.isFinite(datos.duracionMaximaMs) || datos.duracionMaximaMs < 60000,
+        'duracionMaximaMs tiene que ser al menos un minuto.');
+}
+
+function validarEncuestas(datos, r) {
+    r.error(!texto(datos.titulo), 'titulo es obligatorio.');
+    // Discord no admite mas de 25 opciones en un select.
+    r.error(!Number.isFinite(datos.maximoOpciones) || datos.maximoOpciones < 2 || datos.maximoOpciones > 25,
+        'maximoOpciones tiene que estar entre 2 y 25.');
+    r.error(!Number.isFinite(datos.duracionMaximaMs) || datos.duracionMaximaMs < 60000,
+        'duracionMaximaMs tiene que ser al menos un minuto.');
+}
+
+function validarProgramados(datos, r) {
+    r.error(typeof datos.activo !== 'boolean', 'activo tiene que ser booleano.');
+    r.error(!Number.isFinite(datos.maximoPorServidor) || datos.maximoPorServidor < 1,
+        'maximoPorServidor tiene que ser un numero mayor que 0.');
+    r.error(!Number.isFinite(datos.intervaloRevisionMs) || datos.intervaloRevisionMs < 15000,
+        'intervaloRevisionMs no puede bajar de 15000 ms.');
+    for (const [clave, valor] of Object.entries(datos.repeticiones ?? {})) {
+        r.error(!Number.isFinite(valor) || valor < 60000, `repeticiones.${clave} tiene que ser al menos un minuto.`);
+    }
+}
+
+
 const VALIDADORES = {
     bot: validarBot,
     brand: validarBrand,
@@ -421,7 +524,12 @@ const VALIDADORES = {
     shop: validarShop,
     sellauth: validarSellAuth,
     status: validarStatus,
-    suggestions: validarSuggestions
+    suggestions: validarSuggestions,
+    mantenimiento: validarMantenimiento,
+    automod: validarAutomod,
+    sorteos: validarSorteos,
+    encuestas: validarEncuestas,
+    programados: validarProgramados
 };
 
 function validar(nombre, datos = config.cargar(nombre)) {

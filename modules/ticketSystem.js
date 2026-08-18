@@ -43,6 +43,7 @@ const ESQUEMA = {
 const MAX_CAMPOS_MODAL = 5;
 
 const SEGUNDOS_ANTES_DE_BORRAR = 5000;
+const INTERVALO_PODA_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Sistema de tickets.
@@ -103,24 +104,60 @@ class TicketSystem {
         }
 
         if (ajustes.autocierre.activo) this.programarAutocierre();
+        this.programarPoda();
+        if (ajustes.sla?.activo) this.programarSla();
     }
 
-    /** Retira de la base de datos los tickets cuyo canal ya no existe. */
+    /**
+     * Retira de la base de datos los tickets cuyo canal ya no existe.
+     *
+     * Se mira primero la cache y solo se pide a Discord lo que falta, en
+     * paralelo: en serie, cuarenta tickets abiertos eran cuarenta viajes
+     * encadenados que retrasaban el arranque varios segundos.
+     */
     async limpiarHuerfanos() {
-        let retirados = 0;
+        const ids = Object.keys(this.db.data.activos);
+        if (!ids.length) return 0;
 
-        for (const canalId of Object.keys(this.db.data.activos)) {
+        const comprobaciones = await Promise.all(ids.map(async canalId => {
+            if (this.client.channels.cache.has(canalId)) return null;
             const canal = await this.client.channels.fetch(canalId).catch(() => null);
-            if (canal) continue;
+            return canal ? null : canalId;
+        }));
 
+        const huerfanos = comprobaciones.filter(Boolean);
+        for (const canalId of huerfanos) {
             const t = this.db.data.activos[canalId];
             this.soltarDeUsuario(t.userId, t.id);
             delete this.db.data.activos[canalId];
-            retirados++;
         }
 
-        if (retirados) this.db.flush();
-        return retirados;
+        if (huerfanos.length) this.db.flush();
+        return huerfanos.length;
+    }
+
+    /**
+     * Poda periodica del historico.
+     *
+     * activos es pequeno, pero archivados y valoraciones crecen para siempre y
+     * el JSON se reescribe entero en cada guardado: sin poda, cada ticket nuevo
+     * encarece todos los guardados posteriores. Lo retirado se conserva en
+     * database/historico/.
+     */
+    programarPoda() {
+        const podar = () => {
+            const { retencion } = this.config.ajustes;
+            const maxArchivados = Number(retencion?.maxArchivados) || 500;
+            const maxValoraciones = Number(retencion?.maxValoraciones) || 1000;
+
+            this.db.podar('archivados', maxArchivados, t => Number(t?.cerradoEn ?? t?.abiertoEn ?? 0));
+            this.db.podar('valoraciones', maxValoraciones, v => Number(v?.fecha ?? 0));
+        };
+
+        podar();
+        const temporizador = setInterval(podar, INTERVALO_PODA_MS);
+        temporizador.unref?.();
+        this.temporizadorPoda = temporizador;
     }
 
     // ------------------------------------------------------------------ panel
@@ -265,6 +302,8 @@ class TicketSystem {
             case 'eliminar': return this.pedirEliminar(interaction, datos[0]);
             case 'eliminarok': return this.eliminarCanal(interaction, datos[0]);
             case 'valorar': return this.registrarValoracion(interaction, datos[0], Number(datos[1]));
+            case 'macros': return this.mostrarMacros(interaction, datos[0]);
+            case 'macro': return this.enviarMacro(interaction, datos[0]);
             default: return undefined;
         }
     }
@@ -312,6 +351,11 @@ class TicketSystem {
                 components: [ui.error(this.emojis, 'That category is no longer available.')],
                 flags: ui.V2_EFIMERO
             });
+        }
+
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.reply({ components: [mantenimiento], flags: ui.V2_EFIMERO });
         }
 
         const bloqueo = this.db.data.bloqueados[interaction.user.id];
@@ -395,6 +439,11 @@ class TicketSystem {
                 components: [ui.error(this.emojis, 'That ticket category is no longer available.')],
                 flags: ui.V2
             });
+        }
+
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.editReply({ components: [mantenimiento], flags: ui.V2 });
         }
 
         const bloqueo = this.db.data.bloqueados[interaction.user.id];
@@ -491,6 +540,10 @@ class TicketSystem {
         ticket.mensajeId = mensajeInicial.id;
         this.db.flush();
         this.programarRefrescoPanel();
+
+        await this.asignarPorRotacion(ticket)
+            .then(elegido => elegido && this.refrescarMensaje(ticket))
+            .catch(error => logger.warn('tickets', `Reparto automatico: ${error.message}`));
 
         logger.ok('tickets', `#${this.numeroFmt(numero)} abierto por ${interaction.user.tag}`);
         // El registro no se espera para no retrasar la respuesta, pero se
@@ -692,6 +745,7 @@ class TicketSystem {
                 new StringSelectMenuOptionBuilder().setLabel('Añadir nota interna').setDescription('Visible únicamente desde los controles del staff').setValue('note'),
                 new StringSelectMenuOptionBuilder().setLabel('Ver notas internas').setDescription(`${notas} nota(s) guardada(s)`).setValue('notes'),
                 new StringSelectMenuOptionBuilder().setLabel(bloqueado ? 'Desbloquear cliente' : 'Bloquear futuros tickets').setDescription(bloqueado ? 'Permite que vuelva a abrir tickets' : 'Impide nuevas solicitudes de este cliente').setValue(bloqueado ? 'unblock' : 'block'),
+                new StringSelectMenuOptionBuilder().setLabel('Respuesta rápida').setDescription(`${this.config.macros?.length ?? 0} plantilla(s) disponibles`).setValue('macro'),
                 new StringSelectMenuOptionBuilder().setLabel('Actualizar panel público').setDescription('Reconstruye el resumen visible del caso').setValue('refresh')
             );
         c.addActionRowComponents(new ActionRowBuilder().addComponents(acciones));
@@ -746,6 +800,7 @@ class TicketSystem {
 
         const accion = interaction.values?.[0];
         if (accion === 'priority') return this.mostrarPrioridades(interaction, canalId, true);
+        if (accion === 'macro') return this.mostrarMacros(interaction, canalId);
         if (accion === 'rename') return interaction.showModal(this.modalAdmin(
             `ticket:renombrarmodal:${canalId}`, 'Renombrar ticket', 'name', 'Referencia del canal',
             'Ejemplo: revisar-pago o pedido-184', 70, false
@@ -1617,6 +1672,209 @@ class TicketSystem {
         });
     }
 
+    // ---------------------------------------------------------- respuestas rapidas
+
+    /**
+     * Plantillas de respuesta definidas en config/tickets.json > macros.
+     *
+     * El contenido va en ingles porque lo lee el cliente; el selector, en
+     * espanol, porque solo lo ve el equipo.
+     */
+    async mostrarMacros(interaction, canalId) {
+        const t = this.db.data.activos[canalId];
+        if (!t) return this.avisarTicketAusente(interaction);
+        if (!permisos.puede(interaction.member, 'menuAdmin')) {
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'No tienes permiso para usar las respuestas rápidas.'));
+        }
+
+        const macros = (this.config.macros ?? []).slice(0, 25);
+        if (!macros.length) {
+            return ui.responderEfimero(interaction, ui.info(this.emojis,
+                'No hay plantillas definidas. Añádelas en `config/tickets.json` > `macros`.'));
+        }
+
+        const selector = new StringSelectMenuBuilder()
+            .setCustomId(`ticket:macro:${canalId}`)
+            .setPlaceholder('Elige una respuesta rápida')
+            .addOptions(macros.map(macro =>
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(ui.truncar(macro.nombre, 100))
+                    .setDescription(ui.truncar(macro.descripcion ?? '', 100))
+                    .setValue(macro.id)
+            ));
+
+        return ui.responderEfimero(interaction, ui.panel(this.emojis, {
+            emoji: 'macro',
+            titulo: 'Respuestas rápidas',
+            subtitulo: 'Se publicará en el ticket a nombre del equipo.',
+            acciones: [new ActionRowBuilder().addComponents(selector)],
+            pie: 'Revisa el texto antes de enviarlo: se publica tal cual.'
+        }));
+    }
+
+    async enviarMacro(interaction, canalId) {
+        const t = this.db.data.activos[canalId];
+        if (!t) return this.avisarTicketAusente(interaction);
+        if (!permisos.puede(interaction.member, 'menuAdmin')) {
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'No tienes permiso para usar las respuestas rápidas.'));
+        }
+
+        const macro = (this.config.macros ?? []).find(item => item.id === interaction.values[0]);
+        if (!macro) {
+            return ui.responderEfimero(interaction, ui.error(this.emojis, 'Esa plantilla ya no existe.'));
+        }
+
+        const canal = await this.client.channels.fetch(canalId).catch(() => null);
+        if (!canal) return this.avisarTicketAusente(interaction);
+
+        await canal.send({
+            components: [ui.panel(this.emojis, {
+                emoji: 'info',
+                titulo: 'Support update',
+                cuerpo: [macro.contenido],
+                pie: `Sent by the support team · ${interaction.user.displayName ?? interaction.user.username}`
+            })],
+            flags: ui.V2,
+            allowedMentions: { users: [t.userId] }
+        });
+
+        t.ultimaRespuestaStaff = Date.now();
+        t.slaAvisadoEn = 0;
+        this.db.save();
+        this.registrarAccion(t, 'Respuesta rápida', interaction.user, macro.nombre);
+
+        return ui.responderEfimero(interaction, ui.exito(this.emojis, `Plantilla «${ui.plano(macro.nombre)}» publicada en el ticket.`));
+    }
+
+    // ---------------------------------------------------------------- reparto
+
+    /**
+     * Reparto rotatorio del staff.
+     *
+     * Sin esto, un ticket se queda sin duenio hasta que alguien pulsa Claim, y
+     * en la practica los casos incomodos esperan mas. La rotacion recuerda a
+     * quien le toco por ultima vez y sigue por el siguiente.
+     */
+    async asignarPorRotacion(ticket) {
+        const { asignacion } = this.config.ajustes;
+        if (!asignacion?.activo || !asignacion.rolesId?.length) return null;
+
+        const guild = this.client.guilds.cache.get(process.env.GUILD_ID) ?? this.client.guilds.cache.first();
+        if (!guild) return null;
+
+        const miembros = await guild.members.fetch().catch(() => null);
+        if (!miembros) return null;
+
+        const candidatos = [...miembros.values()]
+            .filter(miembro => !miembro.user.bot)
+            .filter(miembro => asignacion.rolesId.some(rol => miembro.roles.cache.has(rol)))
+            .filter(miembro => !asignacion.excluirAusentes
+                || !['idle', 'dnd', 'offline'].includes(miembro.presence?.status ?? 'offline')
+                || !miembro.presence)
+            .sort((a, b) => a.id.localeCompare(b.id));
+
+        if (!candidatos.length) return null;
+
+        const indice = (this.db.data.ultimoAsignado ?? -1) + 1;
+        const elegido = candidatos[indice % candidatos.length];
+        this.db.data.ultimoAsignado = indice % candidatos.length;
+
+        ticket.reclamadoPor = elegido.id;
+        ticket.reclamadoEn = Date.now();
+        ticket.asignadoAutomaticamente = true;
+        this.db.save();
+
+        if (asignacion.avisarPorMd) {
+            await elegido.send({
+                components: [ui.panel(this.emojis, {
+                    emoji: 'ticketAbierto',
+                    titulo: `Te han asignado el ticket #${this.numeroFmt(ticket.id)}`,
+                    cuerpo: [ui.campos(this.emojis, [
+                        { emoji: 'usuario', etiqueta: 'Cliente', valor: `<@${ticket.userId}>` },
+                        { emoji: 'catalogo', etiqueta: 'Categoría', valor: this.config.categorias[ticket.categoria]?.nombre ?? ticket.categoria }
+                    ])],
+                    acciones: [ui.fila(ui.boton(this.emojis, {
+                        url: `https://discord.com/channels/${guild.id}/${ticket.canalId}`,
+                        etiqueta: 'Abrir ticket',
+                        estilo: 'enlace',
+                        emoji: 'enlace'
+                    }))],
+                    pie: 'Reparto automático por rotación. Puedes liberarlo desde el propio ticket.'
+                })],
+                flags: ui.V2,
+                allowedMentions: { parse: [] }
+            }).catch(() => {});
+        }
+
+        return elegido;
+    }
+
+    // -------------------------------------------------------------------- SLA
+
+    /**
+     * Vigilancia de tiempos de respuesta.
+     *
+     * /ticket-stats ya calculaba el SLA, pero solo cuando alguien se acordaba
+     * de mirarlo. Esto avisa al equipo mientras todavia se puede corregir.
+     */
+    programarSla() {
+        const { sla } = this.config.ajustes;
+        const intervalo = Math.max(60_000, Number(sla?.intervaloMs) || 300_000);
+
+        this.temporizadorSla = setInterval(() => {
+            this.revisarSla().catch(error => logger.traza('tickets:sla', error));
+        }, intervalo);
+        this.temporizadorSla.unref?.();
+    }
+
+    async revisarSla() {
+        const { sla } = this.config.ajustes;
+        if (!sla?.activo) return;
+
+        const destinoId = sla.canalAvisosId || this.config.ajustes.transcripciones?.canalId;
+        if (!destinoId) return;
+
+        const ahora = Date.now();
+        const recordar = Number(sla.recordarCadaMs) || 3_600_000;
+        const incumplen = [];
+
+        for (const t of Object.values(this.db.data.activos)) {
+            if (ahora - (t.slaAvisadoEn ?? 0) < recordar) continue;
+
+            const sinReclamar = !t.reclamadoPor && ahora - t.abiertoEn >= Number(sla.sinReclamarMs || 0);
+            const sinRespuesta = t.reclamadoPor
+                && ahora - (t.ultimaRespuestaStaff ?? t.abiertoEn) >= Number(sla.sinRespuestaMs || 0);
+
+            if (!sinReclamar && !sinRespuesta) continue;
+
+            t.slaAvisadoEn = ahora;
+            incumplen.push({ t, motivo: sinReclamar ? 'sin reclamar' : 'sin respuesta del staff' });
+        }
+
+        if (!incumplen.length) return;
+        this.db.save();
+
+        const canal = await this.client.channels.fetch(destinoId).catch(() => null);
+        if (!canal?.isTextBased?.()) return;
+
+        const lineas = incumplen.slice(0, 15).map(({ t, motivo }) =>
+            `- **#${this.numeroFmt(t.id)}** · <#${t.canalId}> · ${motivo} desde ${ui.fecha(t.reclamadoPor ? (t.ultimaRespuestaStaff ?? t.abiertoEn) : t.abiertoEn, 'R')}` +
+            `${t.reclamadoPor ? ` · responsable <@${t.reclamadoPor}>` : ''}`
+        ).join('\n');
+
+        await canal.send({
+            components: [ui.panel(this.emojis, {
+                emoji: 'sla',
+                titulo: 'Tickets fuera de SLA',
+                subtitulo: `${incumplen.length} caso(s) pendientes de atención.`,
+                cuerpo: [lineas],
+                pie: 'Aviso interno del sistema de tickets. Se repite como mucho una vez por hora y ticket.'
+            })],
+            flags: ui.V2,
+            allowedMentions: { parse: [] }
+        }).catch(error => logger.warn('tickets:sla', `No se pudo avisar: ${error.message}`));
+    }
+
     // -------------------------------------------------------------- actividad
 
     /**
@@ -1631,6 +1889,12 @@ class TicketSystem {
         if (mensaje.author.id === t.userId) {
             t.ultimaActividad = Date.now();
             t.avisadoInactividad = false;
+            this.db.save();
+        } else {
+            // El SLA mide cuanto lleva el cliente esperando: solo se reinicia
+            // cuando responde alguien del equipo, no con la actividad del bot.
+            t.ultimaRespuestaStaff = Date.now();
+            t.slaAvisadoEn = 0;
             this.db.save();
         }
 
