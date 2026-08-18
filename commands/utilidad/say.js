@@ -40,6 +40,8 @@ const COMMAND_NAME = 'say';
 const SAY_BUILD = 'say';
 const DATABASE_FILE = 'sayDatabase.json';
 const MAX_UPLOADS = 5;
+const MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 15_000;
 const MAX_LINK_BUTTONS = 5;
 
 function findBotRoot() {
@@ -1254,6 +1256,16 @@ function uploadedFilesFromModal(interaction) {
 /*                         PREPARACIÓN DE ARCHIVOS                            */
 /* -------------------------------------------------------------------------- */
 
+/** Solo se descargan adjuntos servidos por la CDN de Discord. */
+function esOrigenDiscord(valor) {
+  try {
+    const { protocol, hostname } = new URL(valor);
+    return protocol === 'https:' && /(^|\.)(discordapp\.(com|net)|discord\.com)$/i.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function prepareDocumentAttachments(draft) {
   const docs = draft.uploadedFiles.filter(file => !isMediaAttachment(file)).slice(0, MAX_UPLOADS);
   const files = [];
@@ -1262,12 +1274,38 @@ async function prepareDocumentAttachments(draft) {
   for (let index = 0; index < docs.length; index += 1) {
     const file = docs[index];
     const source = file.url || file.proxyURL;
-    if (!isUrl(source)) continue;
+    if (!isUrl(source) || !esOrigenDiscord(source)) continue;
 
-    const response = await fetch(source);
+    // Timeout y tope de tamano: una descarga colgada bloqueaba la interaccion
+    // hasta que Discord la daba por muerta, y una grande se comia la memoria.
+    const controlador = new AbortController();
+    const temporizador = setTimeout(() => controlador.abort(), DOWNLOAD_TIMEOUT_MS);
+    temporizador.unref?.();
+
+    let response;
+    try {
+      response = await fetch(source, { signal: controlador.signal });
+    } catch (error) {
+      clearTimeout(temporizador);
+      throw new Error(
+        error.name === 'AbortError'
+          ? `La descarga de ${file.name} supero ${DOWNLOAD_TIMEOUT_MS / 1000} s.`
+          : `No se pudo descargar ${file.name}: ${error.message}`
+      );
+    }
+    clearTimeout(temporizador);
+
     if (!response.ok) throw new Error(`No se pudo descargar ${file.name} (${response.status})`);
 
+    const declarado = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declarado) && declarado > MAX_DOWNLOAD_BYTES) {
+      throw new Error(`${file.name} supera los ${MAX_DOWNLOAD_BYTES / 1048576} MB permitidos.`);
+    }
+
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_DOWNLOAD_BYTES) {
+      throw new Error(`${file.name} supera los ${MAX_DOWNLOAD_BYTES / 1048576} MB permitidos.`);
+    }
     const original = sanitizeFilename(file.name || `archivo-${index + 1}.bin`);
     const unique = `${String(index + 1).padStart(2, '0')}-${original}`;
     files.push({ attachment: buffer, name: unique });
@@ -1320,6 +1358,18 @@ async function showError(interaction, title, message, details = []) {
 function ensurePermission(interaction) {
   return Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageMessages)
     || interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageMessages));
+}
+
+/**
+ * Gestionar mensajes no incluye Mencionar a todos.
+ *
+ * Sin esta comprobacion, cualquier moderador podia pingear al servidor entero a
+ * traves del bot aunque Discord se lo tuviera prohibido: el permiso del bot
+ * sustituia al suyo. El ping se decide por el permiso de quien lo pide.
+ */
+function ensureMentionEveryone(interaction) {
+  return Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.MentionEveryone)
+    || interaction.member?.permissions?.has?.(PermissionFlagsBits.MentionEveryone));
 }
 
 async function getInteractionGuildMember(interaction) {
@@ -1517,6 +1567,17 @@ async function sendDraft(interaction, draft) {
     );
   }
 
+  // Un ping a todo el servidor no puede colarse por la puerta de atras: si
+  // quien publica no tiene Mencionar a todos, se le dice y no se envia.
+  if (combinedAudience(draft).everyone && hasExtra(draft, 'mentions') && !ensureMentionEveryone(interaction)) {
+    return showError(
+      interaction,
+      'Sin permisos',
+      'Necesitas el permiso Mencionar a todos para publicar un mensaje con @everyone.',
+      ['Quita @everyone de la audiencia o desactiva las menciones para continuar.']
+    );
+  }
+
   // Después comprobamos también al bot. Ambos deben poder publicar.
   const botMember = interaction.guild.members.me;
   const botPerms = channel.permissionsFor?.(botMember);
@@ -1543,9 +1604,10 @@ async function sendDraft(interaction, draft) {
     });
 
     const audience = combinedAudience(draft);
+    const puedeEveryone = ensureMentionEveryone(interaction);
     const allowedMentions = hasExtra(draft, 'mentions')
       ? {
-          parse: audience.everyone ? ['everyone'] : [],
+          parse: audience.everyone && puedeEveryone ? ['everyone'] : [],
           users: audience.users,
           roles: audience.roles,
           repliedUser: false,

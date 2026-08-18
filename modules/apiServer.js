@@ -397,12 +397,59 @@ class ApiServer {
 
         // Guardar refresca la cache, asi que los sistemas ven el cambio en la
         // siguiente lectura sin reiniciar nada.
+        const previo = config.cargar(nombre);
+        const cambios = ApiServer.diferencias(previo, datos);
         config.guardar(nombre, datos);
         logger.info('api', `config/${nombre}.json actualizado desde el dashboard`);
+
+        // Un cambio de permisos o de canales tiene que dejar rastro donde lo
+        // vea el equipo, no solo en la salida estandar de la VPS.
+        this.auditar(nombre, cambios, cuerpo?.actor);
 
         if (nombre === 'bot') aplicarPresencia(this.client);
 
         return this.responder(respuesta, 200, { nombre, datos, avisos: revision.avisos });
+    }
+
+    /** Claves que cambian entre dos configuraciones, en notacion de puntos. */
+    static diferencias(antes, despues, prefijo = '', salida = []) {
+        const claves = new Set([...Object.keys(antes ?? {}), ...Object.keys(despues ?? {})]);
+
+        for (const clave of claves) {
+            const ruta = prefijo ? `${prefijo}.${clave}` : clave;
+            const a = antes?.[clave];
+            const b = despues?.[clave];
+
+            const ambosObjeto = a && b && typeof a === 'object' && typeof b === 'object'
+                && !Array.isArray(a) && !Array.isArray(b);
+
+            if (ambosObjeto) ApiServer.diferencias(a, b, ruta, salida);
+            else if (JSON.stringify(a) !== JSON.stringify(b)) salida.push(ruta);
+
+            if (salida.length > 40) return salida;
+        }
+
+        return salida;
+    }
+
+    /** Deja constancia del cambio en el canal de logs y en las alertas. */
+    auditar(nombre, cambios, actor) {
+        if (!cambios.length) return;
+
+        const quien = actor?.id ? `<@${actor.id}>` : 'el dashboard';
+        const lista = cambios.slice(0, 12).map(ruta => `\`${ruta}\``).join(', ');
+        const resto = cambios.length > 12 ? ` y ${cambios.length - 12} mas` : '';
+
+        Promise.resolve(this.client.sistemas?.log?.configuracionEditada?.({
+            archivo: nombre,
+            cambios,
+            actor
+        })).catch(error => logger.warn('api', `No se pudo registrar la auditoria: ${error.message}`));
+
+        // permissions.json decide quien manda: su cambio se avisa siempre.
+        if (nombre === 'permissions') {
+            alertas.critico('config', `${quien} ha cambiado permisos: ${lista}${resto}.`);
+        }
     }
 
     // --------------------------------------------------------------- control

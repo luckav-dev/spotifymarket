@@ -43,6 +43,7 @@ const ESQUEMA = {
 const MAX_CAMPOS_MODAL = 5;
 
 const SEGUNDOS_ANTES_DE_BORRAR = 5000;
+const INTERVALO_PODA_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Sistema de tickets.
@@ -103,24 +104,60 @@ class TicketSystem {
         }
 
         if (ajustes.autocierre.activo) this.programarAutocierre();
+        this.programarPoda();
+        if (ajustes.sla?.activo) this.programarSla();
     }
 
-    /** Retira de la base de datos los tickets cuyo canal ya no existe. */
+    /**
+     * Retira de la base de datos los tickets cuyo canal ya no existe.
+     *
+     * Se mira primero la cache y solo se pide a Discord lo que falta, en
+     * paralelo: en serie, cuarenta tickets abiertos eran cuarenta viajes
+     * encadenados que retrasaban el arranque varios segundos.
+     */
     async limpiarHuerfanos() {
-        let retirados = 0;
+        const ids = Object.keys(this.db.data.activos);
+        if (!ids.length) return 0;
 
-        for (const canalId of Object.keys(this.db.data.activos)) {
+        const comprobaciones = await Promise.all(ids.map(async canalId => {
+            if (this.client.channels.cache.has(canalId)) return null;
             const canal = await this.client.channels.fetch(canalId).catch(() => null);
-            if (canal) continue;
+            return canal ? null : canalId;
+        }));
 
+        const huerfanos = comprobaciones.filter(Boolean);
+        for (const canalId of huerfanos) {
             const t = this.db.data.activos[canalId];
             this.soltarDeUsuario(t.userId, t.id);
             delete this.db.data.activos[canalId];
-            retirados++;
         }
 
-        if (retirados) this.db.flush();
-        return retirados;
+        if (huerfanos.length) this.db.flush();
+        return huerfanos.length;
+    }
+
+    /**
+     * Poda periodica del historico.
+     *
+     * activos es pequeno, pero archivados y valoraciones crecen para siempre y
+     * el JSON se reescribe entero en cada guardado: sin poda, cada ticket nuevo
+     * encarece todos los guardados posteriores. Lo retirado se conserva en
+     * database/historico/.
+     */
+    programarPoda() {
+        const podar = () => {
+            const { retencion } = this.config.ajustes;
+            const maxArchivados = Number(retencion?.maxArchivados) || 500;
+            const maxValoraciones = Number(retencion?.maxValoraciones) || 1000;
+
+            this.db.podar('archivados', maxArchivados, t => Number(t?.cerradoEn ?? t?.abiertoEn ?? 0));
+            this.db.podar('valoraciones', maxValoraciones, v => Number(v?.fecha ?? 0));
+        };
+
+        podar();
+        const temporizador = setInterval(podar, INTERVALO_PODA_MS);
+        temporizador.unref?.();
+        this.temporizadorPoda = temporizador;
     }
 
     // ------------------------------------------------------------------ panel

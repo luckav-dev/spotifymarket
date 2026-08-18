@@ -51,6 +51,8 @@ const ESQUEMA = {
 const MAX_WEBHOOK_BODY = 128 * 1024;
 const MAX_WEBHOOK_PROCESADOS = 1000;
 const MAX_RESENAS_VISTAS = 2500;
+const VENTANA_WEBHOOK_MS = 60_000;
+const MAX_WEBHOOK_POR_VENTANA = 60;
 
 function numero(valor, fallback = 0) {
     const n = Number(valor);
@@ -183,6 +185,11 @@ class SellAuthSystem {
         this.sincronizando = null;
         this.procesandoWebhooks = null;
         this.colaPublicacion = Promise.resolve();
+
+        // Espejo en memoria del array persistido: con 1000 entradas, un
+        // includes() por webhook es trabajo lineal en el camino caliente.
+        this.procesados = new Set(this.db.data.webhook.procesados);
+        this.golpesWebhook = new Map();
     }
 
     get config() {
@@ -929,7 +936,39 @@ class SellAuthSystem {
         return a.length === b.length && crypto.timingSafeEqual(a, b);
     }
 
+    /**
+     * Freno por IP.
+     *
+     * Este servidor escucha de cara a Internet. La firma HMAC garantiza la
+     * autenticidad, pero no impide que alguien martillee el puerto: cada
+     * peticion cuesta leer hasta 128 KB y calcular un HMAC. Aqui se corta antes.
+     */
+    permitirWebhook(ip) {
+        const ahora = Date.now();
+        const registro = this.golpesWebhook.get(ip);
+
+        if (!registro || ahora - registro.desde > VENTANA_WEBHOOK_MS) {
+            this.golpesWebhook.set(ip, { desde: ahora, golpes: 1 });
+
+            // Poda oportunista: el mapa no puede crecer sin techo.
+            if (this.golpesWebhook.size > 5000) {
+                for (const [clave, valor] of this.golpesWebhook) {
+                    if (ahora - valor.desde > VENTANA_WEBHOOK_MS) this.golpesWebhook.delete(clave);
+                }
+            }
+            return true;
+        }
+
+        registro.golpes += 1;
+        return registro.golpes <= MAX_WEBHOOK_POR_VENTANA;
+    }
+
     async atenderWebhook(peticion, respuesta, { secreto, ruta }) {
+        const ip = peticion.socket?.remoteAddress ?? 'desconocida';
+        if (!this.permitirWebhook(ip)) {
+            return this.responderWebhook(respuesta, 429, { error: 'Too many requests' });
+        }
+
         const url = new URL(peticion.url, 'http://localhost');
         if (url.pathname !== ruta) return this.responderWebhook(respuesta, 404, { error: 'Not found' });
         if (peticion.method !== 'POST') return this.responderWebhook(respuesta, 405, { error: 'Method not allowed' });
@@ -958,7 +997,7 @@ class SellAuthSystem {
         }
 
         const clave = String(peticion.headers['idempotency-key'] || crypto.createHash('sha256').update(raw).digest('hex'));
-        if (this.db.data.webhook.procesados.includes(clave) || this.db.data.webhook.pendientes[clave]) {
+        if (this.procesados.has(clave) || this.db.data.webhook.pendientes[clave]) {
             return this.responderWebhook(respuesta, 200, { received: true, duplicate: true });
         }
 
@@ -986,6 +1025,7 @@ class SellAuthSystem {
                     delete this.db.data.webhook.pendientes[clave];
                     this.db.data.webhook.procesados.push(clave);
                     this.db.data.webhook.procesados = this.db.data.webhook.procesados.slice(-MAX_WEBHOOK_PROCESADOS);
+                    this.procesados = new Set(this.db.data.webhook.procesados);
                 } catch (error) {
                     pendiente.attempts += 1;
                     pendiente.lastError = String(error.message).slice(0, 300);
