@@ -23,6 +23,7 @@ module.exports = {
     once: true,
 
     async execute(client) {
+        client.sistemasListos = false;
         logger.paso('sesion', client.user.tag);
 
         const { creados, existentes, fallidos } = await client.emojiManager.sync();
@@ -84,6 +85,7 @@ module.exports = {
             ['catalogo', `${catalogo} publicados`],
             ['presencia', presencia.actividad ? 'activa' : 'sin actividad']
         ]);
+        client.sistemasListos = true;
         logger.listo();
     }
 };
