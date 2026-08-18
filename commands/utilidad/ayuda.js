@@ -6,17 +6,27 @@ const GRUPOS = [
     {
         titulo: 'Administration',
         emoji: 'administrador',
-        comandos: ['publish', 'product', 'sellauth', 'emojis', 'say', 'setup', 'diagnostics', 'ticket-stats']
+        comandos: ['publish', 'product', 'sellauth', 'stock', 'emojis', 'say', 'schedule', 'setup', 'diagnostics', 'maintenance']
     },
     {
         titulo: 'Moderation',
         emoji: 'moderacion',
-        comandos: ['ban', 'unban', 'kick', 'timeout', 'untimeout', 'warn', 'warnings', 'remove-warning', 'clear', 'channel']
+        comandos: ['ban', 'unban', 'kick', 'timeout', 'untimeout', 'warn', 'warnings', 'remove-warning', 'clear', 'channel', 'automod']
+    },
+    {
+        titulo: 'Support',
+        emoji: 'ticket',
+        comandos: ['ticket-stats', 'ticket-history']
+    },
+    {
+        titulo: 'Community',
+        emoji: 'celebrar',
+        comandos: ['giveaway', 'poll', 'suggest']
     },
     {
         titulo: 'Information',
         emoji: 'info',
-        comandos: ['help', 'server-info', 'user-info', 'status', 'suggest']
+        comandos: ['help', 'server-info', 'user-info', 'status']
     }
 ];
 
@@ -34,8 +44,10 @@ module.exports = {
                 .map(comando => `- **/${comando.data.name}** — ${comando.data.description}`)
                 .join('\n');
 
+            // Sin esta guarda, quitar un comando dejaba su cabecera suelta.
+            if (!comandos) return null;
             return ui.texto(`### ${emojis.rol(grupo.emoji)} ${grupo.titulo}\n${comandos}`);
-        });
+        }).filter(Boolean);
 
         return interaction.reply({
             components: [ui.panel(emojis, {

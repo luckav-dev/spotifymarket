@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 
-import { sesionActual } from '@/lib/sesion';
+import { sesionVigente } from '@/lib/sesion';
 import { BarraLateral } from '@/components/dashboard/sidebar';
 import { Cabecera } from '@/components/dashboard/header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -12,9 +12,12 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
  * Proxy solo comprobo que existia la cookie (chequeo optimista, sin I/O). Aqui
  * se deserializa y se valida la firma HMAC y la caducidad; si algo no cuadra,
  * fuera. Ningun dato de la sesion llega al cliente sin pasar por aqui.
+ *
+ * sesionVigente ademas vuelve a preguntar al bot por el nivel cada pocos
+ * minutos: una cookie firmada demuestra quien eres, no que sigas siendo staff.
  */
 export default async function LayoutDashboard({ children }: { children: React.ReactNode }) {
-  const sesion = await sesionActual();
+  const sesion = await sesionVigente();
   if (!sesion) redirect('/login');
   const cookieStore = await cookies();
   const sidebarAbierta = cookieStore.get('sidebar_state')?.value !== 'false';
