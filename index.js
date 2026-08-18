@@ -56,6 +56,7 @@ client.emojiManager = new EmojiManager(client);
 client.config = config;
 client.logger = logger;
 client.ui = ui;
+client.sistemasListos = false;
 
 /** Carga recursiva de commands/, agrupados por subcarpeta de dominio. */
 function cargarComandos(dir = path.join(__dirname, 'commands')) {
@@ -146,7 +147,9 @@ function iniciarWatchdog() {
     watchdog = setInterval(() => {
         if (apagando) return;
 
-        if (client.isReady()) {
+        const discordListo = client.isReady();
+        const sistemasListos = client.sistemasListos === true;
+        if (discordListo && sistemasListos) {
             noReadyDesde = 0;
             return;
         }
@@ -159,7 +162,8 @@ function iniciarWatchdog() {
         const desconectadoMs = Date.now() - noReadyDesde;
         if (desconectadoMs < WATCHDOG_MAX_NOT_READY_MS) return;
 
-        logger.error('watchdog', `Discord lleva ${Math.round(desconectadoMs / 1000)} s sin estar listo. Forzando reinicio supervisado.`);
+        const motivo = !discordListo ? 'Discord no esta listo' : 'los subsistemas no terminaron de iniciar';
+        logger.error('watchdog', `${motivo} desde hace ${Math.round(desconectadoMs / 1000)} s. Forzando reinicio supervisado.`);
         apagar('watchdog', 1);
     }, WATCHDOG_INTERVAL_MS);
 
