@@ -1,0 +1,53 @@
+# Unidad de systemd para el bot.
+#
+# index.js sale con codigo 1 en todo fallo fatal y el watchdog fuerza esa
+# salida cuando el bot lleva 3 minutos sin estar operativo. Esa estrategia solo
+# funciona si hay un supervisor que lo vuelva a levantar: sin esta unidad, el
+# watchdog es un boton de apagado.
+#
+#   sudo cp deploy/spotifymarket.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now spotifymarket
+
+[Unit]
+Description=Spotify Market Discord Bot
+Documentation=https://github.com/luckav-dev/spotifymarket
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spotifymarket
+Group=spotifymarket
+WorkingDirectory=/opt/spotifymarket
+EnvironmentFile=/opt/spotifymarket/.env
+ExecStart=/usr/bin/node index.js
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=5
+# Sin esto systemd se rinde tras 5 reinicios en 10 s y deja el bot muerto.
+# El freno de bucles ya lo aplica el propio proceso (utils/supervision.js).
+StartLimitIntervalSec=0
+
+# Un apagado limpio necesita volcar la base de datos a disco.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=spotifymarket
+
+# Endurecimiento: el bot solo necesita escribir en su propio directorio.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/spotifymarket/database /opt/spotifymarket/config /opt/spotifymarket/emojis.json
+
+[Install]
+WantedBy=multi-user.target

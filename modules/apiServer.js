@@ -7,6 +7,7 @@ const { ChannelType } = require('discord.js');
 const logger = require('../utils/logger');
 const config = require('../utils/config');
 const permisos = require('../utils/permisos');
+const alertas = require('../utils/alertas');
 const constructor = require('../utils/constructorV2');
 const validacionConfig = require('../utils/validacionConfig');
 const { aplicarPresencia } = require('../utils/presencia');
@@ -26,6 +27,7 @@ const { aplicarPresencia } = require('../utils/presencia');
 const PUERTO_POR_DEFECTO = 8787;
 const HOST_POR_DEFECTO = '127.0.0.1';
 const MAX_CUERPO_BYTES = 512 * 1024;
+const MAX_INTENTOS_LISTEN = 5;
 
 /** Solo estos archivos se pueden leer y escribir. Cierra el paso a ../ */
 const CONFIGS = new Set([
@@ -39,6 +41,7 @@ class ApiServer {
         this.emojis = emojis;
         this.servidor = null;
 
+        this.intentos = 0;
         this.token = process.env.DASHBOARD_TOKEN?.trim() ?? '';
         this.puerto = Number(process.env.DASHBOARD_API_PORT) || PUERTO_POR_DEFECTO;
         this.host = process.env.DASHBOARD_API_HOST?.trim() || HOST_POR_DEFECTO;
@@ -52,8 +55,12 @@ class ApiServer {
             return false;
         }
 
+        // Un token corto es adivinable y esta API publica y escribe toda la
+        // configuracion del bot: se rechaza en vez de avisar y seguir.
         if (this.token.length < 32) {
-            logger.warn('api', 'DASHBOARD_TOKEN es corto: usa al menos 32 caracteres aleatorios.');
+            logger.error('api', `DASHBOARD_TOKEN mide ${this.token.length} caracteres y hacen falta 32 como minimo.`);
+            logger.detalle('genera uno con: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+            return false;
         }
 
         this.servidor = http.createServer((peticion, respuesta) => {
@@ -67,21 +74,63 @@ class ApiServer {
         this.servidor.headersTimeout = 10000;
         this.servidor.keepAliveTimeout = 5000;
 
-        this.servidor.listen(this.puerto, this.host, () => {
-            logger.paso('api', `escuchando en ${this.host}:${this.puerto}`);
-        });
+        this.escuchar();
 
+        // Un EADDRINUSE al arrancar solia dejar la API muerta en silencio con el
+        // bot aparentemente sano. Se reintenta: lo normal es que sea el proceso
+        // anterior todavia liberando el puerto.
         this.servidor.on('error', error => {
+            if (error.code === 'EADDRINUSE' && this.intentos < MAX_INTENTOS_LISTEN) {
+                this.intentos += 1;
+                const espera = 2000 * this.intentos;
+                logger.warn('api', `El puerto ${this.puerto} esta ocupado. Reintento ${this.intentos}/${MAX_INTENTOS_LISTEN} en ${espera / 1000} s.`);
+                const t = setTimeout(() => this.escuchar(), espera);
+                t.unref?.();
+                return;
+            }
+
             logger.error('api', error.code === 'EADDRINUSE'
-                ? `El puerto ${this.puerto} ya esta ocupado.`
+                ? `El puerto ${this.puerto} sigue ocupado tras ${MAX_INTENTOS_LISTEN} intentos: el dashboard no podra conectarse.`
                 : error.message);
+            alertas.aviso('api', `La API local no pudo escuchar en ${this.host}:${this.puerto}: ${error.message}`);
         });
 
         return true;
     }
 
+    escuchar() {
+        this.servidor.listen(this.puerto, this.host, () => {
+            this.intentos = 0;
+            logger.paso('api', `escuchando en ${this.host}:${this.puerto}`);
+        });
+    }
+
     detener() {
         this.servidor?.close();
+    }
+
+    /**
+     * Estado sin token, para que un supervisor pueda sondearlo.
+     *
+     * No expone nada sensible a proposito: solo si el bot esta vivo y sus
+     * subsistemas arrancados. /api/estado, que si lleva datos, sigue pidiendo
+     * el bearer.
+     */
+    salud() {
+        const discord = this.client.isReady();
+        const sistemas = this.client.sistemasListos === true;
+
+        return {
+            codigo: discord && sistemas ? 200 : 503,
+            cuerpo: {
+                ok: discord && sistemas,
+                discord,
+                sistemas,
+                uptimeMs: this.client.uptime ?? 0,
+                memoriaMb: Math.round(process.memoryUsage().rss / 1048576),
+                version: require('../package.json').version
+            }
+        };
     }
 
     // ------------------------------------------------------------ utilidades
@@ -143,6 +192,15 @@ class ApiServer {
         if (!['GET', 'POST', 'PUT', 'DELETE'].includes(peticion.method)) {
             return this.responder(respuesta, 405, { error: 'Metodo no permitido' });
         }
+
+        // El healthcheck va antes del token: lo consulta systemd o el monitor
+        // externo, que no tienen credenciales y solo escuchan en loopback.
+        const ruta = new URL(peticion.url, `http://${this.host}`).pathname;
+        if (peticion.method === 'GET' && (ruta === '/health' || ruta === '/healthz')) {
+            const { codigo, cuerpo } = this.salud();
+            return this.responder(respuesta, codigo, cuerpo);
+        }
+
         if (!this.autorizado(peticion)) {
             return this.responder(respuesta, 401, { error: 'No autorizado' });
         }

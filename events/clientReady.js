@@ -4,6 +4,7 @@ const { Events } = require('discord.js');
 
 const logger = require('../utils/logger');
 const config = require('../utils/config');
+const alertas = require('../utils/alertas');
 const { aplicarPresencia } = require('../utils/presencia');
 
 const TicketSystem = require('../modules/ticketSystem');
@@ -48,15 +49,35 @@ module.exports = {
             mod: new ModerationSystem(client, emojis)
         };
 
-        client.sistemas.log.registrar();
-        client.sistemas.verify.iniciar();
-        await client.sistemas.sellauth.iniciar();
-        client.sistemas.shop.iniciar();
-        client.sistemas.rules.iniciar();
-        await client.sistemas.welcome.iniciar();
-        await client.sistemas.ticket.iniciar();
+        // Cada subsistema arranca aislado: si SellAuth esta caido o a un canal
+        // le falta un permiso, el bot tiene que quedarse en pie igualmente. Un
+        // throw aqui dejaba sistemasListos en false y el watchdog reiniciaba en
+        // bucle sin que nadie se enterase.
+        const degradados = [];
+        const arrancar = async (nombre, tarea) => {
+            try {
+                await tarea();
+            } catch (error) {
+                degradados.push(nombre);
+                logger.error('sistemas', `'${nombre}' no arranco: ${error.message}`);
+                logger.traza(`sistemas:${nombre}`, error);
+            }
+        };
 
+        await arrancar('log', () => client.sistemas.log.registrar());
+        await arrancar('verify', () => client.sistemas.verify.iniciar());
+        await arrancar('sellauth', () => client.sistemas.sellauth.iniciar());
+        await arrancar('shop', () => client.sistemas.shop.iniciar());
+        await arrancar('rules', () => client.sistemas.rules.iniciar());
+        await arrancar('welcome', () => client.sistemas.welcome.iniciar());
+        await arrancar('ticket', () => client.sistemas.ticket.iniciar());
+
+        client.sistemasDegradados = degradados;
         logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));
+        if (degradados.length) {
+            logger.warn('sistemas', `${degradados.length} degradado(s): ${degradados.join(', ')}`);
+            alertas.aviso('arranque', `El bot arranco con subsistemas degradados: ${degradados.join(', ')}.`);
+        }
 
         // Fuera de client.sistemas a proposito: ahi solo van los dominios de
         // customId que enruta interactionCreate, y la API no atiende ninguno.
@@ -83,9 +104,11 @@ module.exports = {
             ['emojis', String(Object.keys(emojis.all()).length)],
             ['tickets', `${activos} abiertos`],
             ['catalogo', `${catalogo} publicados`],
-            ['presencia', presencia.actividad ? 'activa' : 'sin actividad']
+            ['presencia', presencia.actividad ? 'activa' : 'sin actividad'],
+            ['estado', degradados.length ? `${degradados.length} degradado(s)` : 'todo operativo']
         ]);
         client.sistemasListos = true;
+        client.confirmarArranque?.();
         logger.listo();
     }
 };

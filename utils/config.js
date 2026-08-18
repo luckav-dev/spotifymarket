@@ -88,4 +88,15 @@ function guardar(nombre, datos) {
     return datos;
 }
 
-module.exports = { cargar, recargar, guardar, backup };
+/** Nombres de todos los config/*.json presentes en disco. */
+function nombres() {
+    try {
+        return fs.readdirSync(DIR)
+            .filter(archivo => archivo.endsWith('.json'))
+            .map(archivo => archivo.slice(0, -5));
+    } catch {
+        return [];
+    }
+}
+
+module.exports = { cargar, recargar, guardar, backup, nombres };
