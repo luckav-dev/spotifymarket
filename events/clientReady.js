@@ -24,17 +24,15 @@ module.exports = {
 
     async execute(client) {
         client.sistemasListos = false;
-        logger.paso('sesion', client.user.tag);
+        logger.paso('session', client.user.tag);
 
         const { creados, existentes, fallidos } = await client.emojiManager.sync();
-        logger.paso('emojis', `${creados + existentes} sincronizados`);
-        if (creados) logger.detalle(`${creados} subidos por primera vez`);
-        if (fallidos.length) logger.detalle(`no subidos: ${fallidos.join(', ')}`);
+        logger.paso('emojis', `${creados + existentes} synchronized`);
+        if (creados) logger.detalle(`${creados} uploaded for the first time`);
+        if (fallidos.length) logger.detalle(`not uploaded: ${fallidos.join(', ')}`);
 
         const emojis = client.emojiManager;
 
-        // Las claves son el dominio del customId: interactionCreate reparte por
-        // el prefijo, sin conocer ningun sistema en concreto.
         client.sistemas = {
             ticket: new TicketSystem(client, emojis),
             verify: new VerifySystem(client, emojis),
@@ -53,24 +51,23 @@ module.exports = {
         await client.sistemas.sellauth.iniciar();
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
+        client.sistemas.status.iniciar();
         await client.sistemas.welcome.iniciar();
         await client.sistemas.ticket.iniciar();
 
-        logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));
+        logger.paso('systems', Object.keys(client.sistemas).join(' · '));
 
-        // Fuera de client.sistemas a proposito: ahi solo van los dominios de
-        // customId que enruta interactionCreate, y la API no atiende ninguno.
         client.api = new ApiServer(client, emojis);
         client.api.iniciar();
 
         try {
             const total = await client.desplegarComandos();
-            logger.paso('despliegue', `${total} comandos · ${process.env.GUILD_ID ? 'gremio' : 'global'}`);
+            logger.paso('commands', `${total} commands · ${process.env.GUILD_ID ? 'guild' : 'global'}`);
             if (!process.env.GUILD_ID) {
-                logger.detalle('sin GUILD_ID la propagacion global tarda hasta 1 h');
+                logger.detalle('without GUILD_ID, global propagation can take up to 1 hour');
             }
         } catch (error) {
-            logger.error('despliegue', `no se pudieron desplegar: ${error.message}`);
+            logger.error('commands', `Could not deploy commands: ${error.message}`);
         }
 
         const presencia = aplicarPresencia(client);
@@ -78,12 +75,12 @@ module.exports = {
         const catalogo = client.sistemas.shop.visibles().length;
 
         logger.resumen([
-            ['servidores', String(client.guilds.cache.size)],
-            ['comandos', String(client.commands.size)],
+            ['servers', String(client.guilds.cache.size)],
+            ['commands', String(client.commands.size)],
             ['emojis', String(Object.keys(emojis.all()).length)],
-            ['tickets', `${activos} abiertos`],
-            ['catalogo', `${catalogo} publicados`],
-            ['presencia', presencia.actividad ? 'activa' : 'sin actividad']
+            ['tickets', `${activos} open`],
+            ['catalog', `${catalogo} published`],
+            ['presence', presencia.actividad ? 'active' : 'no activity']
         ]);
         client.sistemasListos = true;
         logger.listo();
