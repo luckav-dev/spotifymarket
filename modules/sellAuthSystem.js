@@ -36,6 +36,7 @@ const ESQUEMA = {
     facturasUsadas: {},
     contadorResenas: 0,
     guia: { canalId: '', mensajeId: '' },
+    resumen: { canalId: '', mensajeId: '' },
     ultimaSincronizacion: 0,
     webhook: { pendientes: {}, procesados: [] },
     estadisticas: {
@@ -548,6 +549,9 @@ class SellAuthSystem {
             await this.enviarGuia(canal).catch(error =>
                 logger.error('sellauth:guia', `La reseña se publico, pero la guia no: ${error.message}`)
             );
+            await this.actualizarResumen(canal).catch(error =>
+                logger.warn('sellauth:resumen', `No se pudo actualizar el resumen: ${error.message}`)
+            );
             return mensaje;
         };
 
@@ -586,6 +590,100 @@ class SellAuthSystem {
             );
     }
 
+    /** Nota media, reparto por estrellas y volumen publicado. */
+    estadisticasResenas() {
+        const resenas = Object.values(this.db.data.resenas);
+        const reparto = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+        for (const resena of resenas) {
+            const nota = Math.min(Math.max(Math.trunc(Number(resena.rating) || 0), 1), 5);
+            reparto[nota] += 1;
+        }
+
+        const total = resenas.length;
+        const suma = resenas.reduce((n, resena) => n + (Number(resena.rating) || 0), 0);
+        const recientes = resenas.filter(r => Date.now() - (r.createdAt ?? 0) < 30 * 86400000).length;
+
+        return {
+            total,
+            recientes,
+            media: total ? suma / total : 0,
+            reparto,
+            recomiendan: total ? Math.round(((reparto[5] + reparto[4]) / total) * 100) : 0
+        };
+    }
+
+    /**
+     * Resumen agregado de las resenas.
+     *
+     * Cada resena era un mensaje suelto: para saber si la tienda tenia buena
+     * nota habia que ir sumando a ojo. Este panel vive fijo en el canal y se
+     * actualiza cada vez que entra una resena nueva.
+     */
+    construirResumen() {
+        const ajustes = this.config.reviews.resumen ?? {};
+        const stats = this.estadisticasResenas();
+        const estrella = this.emojis.get('estrellita');
+
+        const filas = [5, 4, 3, 2, 1].map(nota => {
+            const cantidad = stats.reparto[nota];
+            const proporcion = stats.total ? cantidad / stats.total : 0;
+            return `\`${nota}\` ${ui.barra(proporcion * 100, 100, 16)} \`${String(cantidad).padStart(3)}\``;
+        }).join('\n');
+
+        return new ContainerBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `## ${this.emojis.rol('valoracion')} ${ajustes.titulo || 'CUSTOMER SATISFACTION'}\n` +
+                `> Every review below is tied to a real, verified SellAuth invoice.`
+            ))
+            .addSeparatorComponents(ui.linea())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `# ${stats.media.toFixed(2)} / 5.00\n` +
+                `${estrella.repeat(Math.round(stats.media)) || `${Math.round(stats.media)}/5`}\n` +
+                `-# Based on ${ui.numero(stats.total)} verified review(s)`
+            ))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(filas))
+            .addSeparatorComponents(ui.linea())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${this.emojis.rol('exito')} **Would recommend:** ${stats.recomiendan}%\n` +
+                `${this.emojis.rol('reloj')} **Last 30 days:** ${ui.numero(stats.recientes)} review(s)\n` +
+                `${this.emojis.rol('verificado')} **Verification:** every review requires a completed invoice`
+            ))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `-# Updated ${ui.fecha(Date.now(), 'R')}`
+            ));
+    }
+
+    /** Publica o actualiza en sitio el panel de resumen del canal de resenas. */
+    async actualizarResumen(canalPreferido = null) {
+        const ajustes = this.config.reviews.resumen ?? {};
+        if (ajustes.activo === false) return null;
+
+        const stats = this.estadisticasResenas();
+        if (stats.total < (Number(ajustes.minimoParaPublicar) || 3)) return null;
+
+        const canal = canalPreferido ?? await this.canalResenas();
+        if (!canal) return null;
+
+        const estado = this.db.data.resumen;
+        const carga = { components: [this.construirResumen()], flags: ui.V2, allowedMentions: { parse: [] } };
+
+        if (estado.canalId === canal.id && estado.mensajeId) {
+            const previo = await canal.messages.fetch(estado.mensajeId).catch(() => null);
+            if (previo) {
+                await previo.edit({ ...carga, attachments: [] });
+                return previo;
+            }
+        }
+
+        const mensaje = await canal.send(carga);
+        this.db.data.resumen = { canalId: canal.id, mensajeId: mensaje.id };
+        this.db.save();
+        return mensaje;
+    }
+
     async borrarGuiaAnterior(canal) {
         const guia = this.db.data.guia;
         if (!guia.mensajeId) return;
@@ -617,6 +715,7 @@ class SellAuthSystem {
         config.guardar('sellauth', ajustes);
 
         await this.borrarGuiaAnterior(canal);
+        await this.actualizarResumen(canal).catch(() => null);
         return this.enviarGuia(canal);
     }
 
