@@ -1,0 +1,13 @@
+{
+  "activo": true,
+  "maximoPorServidor": 50,
+  "intervaloRevisionMs": 30000,
+  "adelantoMaximoMs": 31536000000,
+  "zonaHoraria": "Europe/Madrid",
+  "permitirRepeticion": true,
+  "repeticiones": {
+    "diaria": 86400000,
+    "semanal": 604800000,
+    "mensual": 2592000000
+  }
+}

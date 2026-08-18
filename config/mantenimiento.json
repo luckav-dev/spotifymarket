@@ -1,0 +1,13 @@
+{
+  "titulo": "SCHEDULED MAINTENANCE",
+  "descripcion": "We are performing maintenance on our systems. Purchases and new tickets are paused for a short while.",
+  "mensajeCorto": "Maintenance in progress. Please try again shortly.",
+  "avisarEnCanalId": "",
+  "presencia": {
+    "estado": "idle",
+    "texto": "Under maintenance"
+  },
+  "excepciones": {
+    "nivelMinimoStaff": 3
+  }
+}

@@ -114,6 +114,11 @@ Al anadir nuevos `.png` sin reiniciar, resincroniza con `/emojis`.
 | `config/sellauth.json` | Sincronizacion, canales de reseñas/restocks/precios, webhook y textos publicos |
 | `config/status.json` | Estados operativos, porcentaje, nota e historial del servicio |
 | `config/suggestions.json` | Panel, canal, votos y estados de las sugerencias |
+| `config/automod.json` | Filtros automáticos, acciones y protección antiraid |
+| `config/sorteos.json` | Textos y límites de los sorteos |
+| `config/encuestas.json` | Textos, opciones y duración de las encuestas |
+| `config/programados.json` | Límites y cadencias de los mensajes programados |
+| `config/mantenimiento.json` | Textos, presencia y excepciones del modo mantenimiento |
 
 Los IDs y textos existentes se conservan como fuente de verdad. Los destinos
 opcionales pueden quedarse vacíos hasta activarlos con `/setup`; `/diagnostics`
@@ -198,6 +203,31 @@ usuario, cambio de voto, hilo opcional, estados configurables y respuesta
 pública del equipo. La resolución puede notificarse al autor por mensaje
 privado.
 
+**Auto-moderación.** Filtros de invitaciones, enlaces fuera de la lista blanca,
+patrones de estafa, spam por ventana deslizante, exceso de mayúsculas y de
+menciones. Cada filtro elige su acción (borrar, timeout o aviso registrado) y
+todo queda anotado. La protección antiraid cuenta las entradas por ventana y, al
+superar el umbral, contiene automáticamente a quien llega mientras dura el
+bloqueo y avisa al equipo. `/automod` muestra el estado y levanta el bloqueo.
+
+**Sorteos.** `/giveaway` con requisitos comprobables: rol, antigüedad en el
+servidor y haber comprado. Los requisitos se revisan otra vez al sortear, porque
+entre participar y el sorteo la gente pierde roles o se va. El reparto usa
+Fisher-Yates y avisa a los ganadores por mensaje privado.
+
+**Encuestas.** `/poll` con hasta seis opciones, un voto por miembro, cambio de
+voto y resultados en vivo o revelados al cerrar. El voto se guarda por usuario,
+no como contador, así que no hay forma de votar dos veces.
+
+**Mensajes programados.** `/schedule` guarda el mensaje como datos (los mismos
+bloques que entiende `constructorV2`) y lo publica cuando toca, sobreviviendo a
+reinicios. Admite repetición diaria, semanal o mensual, reintentos con espera
+creciente y menciones solo si se pidieron al programar.
+
+**Modo mantenimiento.** `/maintenance` pausa compras y apertura de tickets sin
+apagar el bot, con aviso público, presencia propia y fin automático opcional. El
+staff por encima del nivel configurado sigue operando con normalidad.
+
 Sin accent color, el indicador visual rapido de cada log es su emoji de
 cabecera: uno distinto por tipo de accion, siempre el mismo para la misma.
 
@@ -222,6 +252,14 @@ cabecera: uno distinto por tipo de accion, siempre el mismo para la misma.
 | `/setup` | Administrador | Configura canales, roles y categorias sin copiar IDs a mano |
 | `/diagnostics` | Administrador | Revisa configuración, IDs y permisos reales del bot |
 | `/ticket-stats` | Gestionar canales | Analiza backlog, flujo, SLA, valoraciones y carga del equipo |
+| `/ticket-history` | Gestionar canales | Busca en tickets abiertos y archivados por cliente, texto o categoría |
+| `/automod` | Moderar miembros | Estado de los filtros, infracciones y bloqueo antiraid |
+| `/giveaway` | Gestionar servidor | Crea, lista y resuelve sorteos con requisitos |
+| `/poll` | Gestionar mensajes | Abre y cierra encuestas de la comunidad |
+| `/schedule` | Gestionar servidor | Programa mensajes puntuales o recurrentes |
+| `/maintenance` | Administrador | Pausa compras y tickets durante una incidencia |
+| `/sellauth` | Administrador | Inspecciona y sincroniza la tienda SellAuth conectada |
+| `/stock` | Administrador | Configura o refresca el tablón automático de stock |
 | `/help` | Todos | Muestra los comandos disponibles |
 | `/status` | Todos | Consulta la disponibilidad actual del servicio |
 | `/suggest` | Todos | Envía una propuesta a la comunidad |
@@ -256,6 +294,9 @@ npm run dev
       paginacion efimera por usuario y compra atendida por ticket.
 - [x] **Fase 4 — Dashboard.** Panel web para editar toda la configuracion y
       redactar anuncios en Components V2. Ver `dashboard/README.md`.
+- [x] **Fase 6 — Comunidad y resiliencia.** Auto-moderación con antiraid,
+      sorteos, encuestas, mensajes programados, modo mantenimiento, niveles de
+      cliente, avisos de restock, supervisión con alertas externas y CI.
 - [x] **Fase 5 — Operaciones.** Bienvenida dinámica, normas, diagnóstico,
       configuración segura con backups, estado del servicio, sugerencias,
       herramientas avanzadas de tickets y paneles web ampliados.
@@ -270,8 +311,22 @@ npx tsc --noEmit
 npm run build
 ```
 
-La comprobación del bot valida sintaxis, los 13 esquemas de configuración,
-emojis, comandos duplicados y la ausencia de accent color en Components V2.
+`npm test` encadena dos cosas: `npm run check` valida sintaxis, los 19 esquemas
+de configuración, emojis, comandos duplicados y la ausencia de accent color en
+Components V2; `npm run unit` ejecuta las pruebas de `test/` con el runner de
+Node.
+
+## Despliegue y vigilancia
+
+El bot sale con código 1 en todo fallo fatal y el watchdog fuerza esa salida
+cuando lleva tres minutos sin estar operativo. **Eso solo funciona si hay un
+supervisor detrás**: la unidad de systemd está en `deploy/spotifymarket.service`
+y las instrucciones completas, en `deploy/README.md`.
+
+Dos variables opcionales del `.env` cierran el círculo: `ALERT_WEBHOOK_URL`
+manda caídas y arranques degradados a un canal privado, y `HEALTHCHECK_URL`
+recibe un latido cada minuto, que es lo único capaz de detectar que el proceso
+murió del todo. Hay además un `GET /health` sin token en la API local.
 
 ## Consola
 

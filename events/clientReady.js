@@ -17,6 +17,11 @@ const WelcomeSystem = require('../modules/welcomeSystem');
 const RulesSystem = require('../modules/rulesSystem');
 const StatusSystem = require('../modules/statusSystem');
 const SuggestionSystem = require('../modules/suggestionSystem');
+const AutoModSystem = require('../modules/autoModSystem');
+const GiveawaySystem = require('../modules/giveawaySystem');
+const PollSystem = require('../modules/pollSystem');
+const SchedulerSystem = require('../modules/schedulerSystem');
+const MaintenanceSystem = require('../modules/maintenanceSystem');
 const ApiServer = require('../modules/apiServer');
 
 module.exports = {
@@ -45,8 +50,16 @@ module.exports = {
             rules: new RulesSystem(client, emojis),
             status: new StatusSystem(client, emojis),
             suggest: new SuggestionSystem(client, emojis),
+            sorteo: new GiveawaySystem(client, emojis),
+            encuesta: new PollSystem(client, emojis),
+            mant: new MaintenanceSystem(client, emojis),
             log: new LogSystem(client, emojis),
-            mod: new ModerationSystem(client, emojis)
+            mod: new ModerationSystem(client, emojis),
+
+            // Sin dominio de customId propio: no atienden interacciones, pero
+            // viven aqui para que el resto de sistemas puedan preguntarles.
+            automod: new AutoModSystem(client, emojis),
+            programados: new SchedulerSystem(client, emojis)
         };
 
         // Cada subsistema arranca aislado: si SellAuth esta caido o a un canal
@@ -71,6 +84,11 @@ module.exports = {
         await arrancar('rules', () => client.sistemas.rules.iniciar());
         await arrancar('welcome', () => client.sistemas.welcome.iniciar());
         await arrancar('ticket', () => client.sistemas.ticket.iniciar());
+        await arrancar('automod', () => client.sistemas.automod.iniciar());
+        await arrancar('sorteo', () => client.sistemas.sorteo.iniciar());
+        await arrancar('encuesta', () => client.sistemas.encuesta.iniciar());
+        await arrancar('programados', () => client.sistemas.programados.iniciar());
+        await arrancar('mant', () => client.sistemas.mant.iniciar());
 
         client.sistemasDegradados = degradados;
         logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));

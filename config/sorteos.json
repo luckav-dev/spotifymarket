@@ -1,0 +1,15 @@
+{
+  "activo": true,
+  "titulo": "GIVEAWAY",
+  "botonParticipar": "Enter giveaway",
+  "botonParticipantes": "Participants",
+  "textoFinalizado": "This giveaway has ended.",
+  "maximoGanadores": 20,
+  "duracionMaximaMs": 2592000000,
+  "avisarGanadoresPorMd": true,
+  "requisitos": {
+    "permitirRolRequerido": true,
+    "permitirAntiguedad": true,
+    "permitirSoloClientes": true
+  }
+}

@@ -353,6 +353,11 @@ class TicketSystem {
             });
         }
 
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.reply({ components: [mantenimiento], flags: ui.V2_EFIMERO });
+        }
+
         const bloqueo = this.db.data.bloqueados[interaction.user.id];
         if (bloqueo) {
             return interaction.reply({
@@ -434,6 +439,11 @@ class TicketSystem {
                 components: [ui.error(this.emojis, 'That ticket category is no longer available.')],
                 flags: ui.V2
             });
+        }
+
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.editReply({ components: [mantenimiento], flags: ui.V2 });
         }
 
         const bloqueo = this.db.data.bloqueados[interaction.user.id];

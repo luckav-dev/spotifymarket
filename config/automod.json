@@ -1,0 +1,68 @@
+{
+  "activo": true,
+  "canalRegistroId": "",
+  "ignorar": {
+    "canales": [],
+    "roles": [],
+    "nivelStaffExento": 1
+  },
+  "filtros": {
+    "invitaciones": {
+      "activo": true,
+      "permitirPropias": true,
+      "accion": "borrar",
+      "aviso": "Server invites are not allowed here."
+    },
+    "enlaces": {
+      "activo": false,
+      "listaBlanca": ["spotify.com", "discord.com", "sellauth.com"],
+      "accion": "borrar",
+      "aviso": "Only links from approved domains are allowed here."
+    },
+    "estafas": {
+      "activo": true,
+      "patrones": [
+        "free\\s+nitro",
+        "steamcommunity\\.com\\/gift",
+        "discord(?:app)?\\s*(?:nitro)?\\s*gift",
+        "claim\\s+your\\s+free",
+        "airdrop\\s+claim"
+      ],
+      "accion": "timeout",
+      "duracionTimeoutMs": 3600000,
+      "aviso": "That message was removed because it matched a known scam pattern."
+    },
+    "spam": {
+      "activo": true,
+      "mensajes": 5,
+      "ventanaMs": 7000,
+      "accion": "timeout",
+      "duracionTimeoutMs": 300000,
+      "aviso": "Please slow down."
+    },
+    "mayusculas": {
+      "activo": false,
+      "minimoCaracteres": 25,
+      "porcentaje": 75,
+      "accion": "borrar",
+      "aviso": "Please avoid writing in all caps."
+    },
+    "menciones": {
+      "activo": true,
+      "maximo": 6,
+      "accion": "timeout",
+      "duracionTimeoutMs": 600000,
+      "aviso": "Too many mentions in a single message."
+    }
+  },
+  "antiRaid": {
+    "activo": true,
+    "entradasPorVentana": 8,
+    "ventanaMs": 60000,
+    "edadMinimaCuentaMs": 604800000,
+    "accion": "verificacion",
+    "duracionBloqueoMs": 900000,
+    "canalAvisoId": "",
+    "mencionarRolId": ""
+  }
+}

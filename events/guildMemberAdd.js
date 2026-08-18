@@ -8,6 +8,12 @@ module.exports = {
 
     async execute(member, client) {
         try {
+            await client.sistemas?.automod?.miembroEntra(member);
+        } catch (error) {
+            logger.traza('guildMemberAdd:antiraid', error);
+        }
+
+        try {
             await client.sistemas?.welcome?.darBienvenida(member);
         } catch (error) {
             logger.traza('guildMemberAdd', error);

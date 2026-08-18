@@ -571,6 +571,11 @@ class ShopSystem {
     }
 
     async comprar(interaction, productoId) {
+        const mantenimiento = this.client.sistemas?.mant?.bloquea(interaction.member);
+        if (mantenimiento) {
+            return interaction.reply({ components: [mantenimiento], flags: ui.V2_EFIMERO });
+        }
+
         const producto = this.visibles().find(item => item.id === productoId);
 
         if (!producto || !producto.visible) {

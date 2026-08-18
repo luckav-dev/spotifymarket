@@ -32,7 +32,7 @@ const MAX_INTENTOS_LISTEN = 5;
 /** Solo estos archivos se pueden leer y escribir. Cierra el paso a ../ */
 const CONFIGS = new Set([
     'bot', 'brand', 'emojis', 'permissions', 'tickets', 'verify', 'welcome', 'rules', 'logs', 'moderacion', 'shop',
-    'sellauth', 'status', 'suggestions'
+    'sellauth', 'status', 'suggestions', 'mantenimiento', 'automod', 'sorteos', 'encuestas', 'programados'
 ]);
 
 class ApiServer {
