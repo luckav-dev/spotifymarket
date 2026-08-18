@@ -23,6 +23,21 @@ const STOCK_SCHEMA = {
     lastError: ''
 };
 
+function cantidadFactura(factura) {
+    const items = Array.isArray(factura?.items) ? factura.items : [];
+    return items.reduce((total, item) => {
+        const cantidad = Math.trunc(Number(item?.quantity));
+        return total + (Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1);
+    }, 0);
+}
+
+function productoConCantidad(nombre, cantidad) {
+    const limpio = String(nombre || 'SellAuth purchase')
+        .replace(/\s+·\s+x\d+\s*$/i, '')
+        .trim();
+    return cantidad > 0 ? `${limpio} · x${cantidad}` : limpio;
+}
+
 class MinimalSellAuthAnnouncements extends SellAuthSystem {
     constructor(client, emojis) {
         super(client, emojis);
@@ -71,6 +86,26 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
             logger.error('sellauth:stock', `No se pudo actualizar el panel: ${error.message}`);
         });
         return resultado;
+    }
+
+    async publicarResena(resena, opciones = {}) {
+        if (resena?.invoiceId) {
+            try {
+                const factura = await this.api.obtenerFactura(resena.invoiceId);
+                const cantidad = cantidadFactura(factura);
+                if (cantidad > 0) {
+                    resena.quantity = cantidad;
+                    resena.productName = productoConCantidad(resena.productName, cantidad);
+                }
+            } catch (error) {
+                logger.warn(
+                    'sellauth:resena',
+                    `No se pudo leer la cantidad de la factura ${resena.invoiceId}: ${error.message}`
+                );
+            }
+        }
+
+        return super.publicarResena(resena, opciones);
     }
 
     detener() {
