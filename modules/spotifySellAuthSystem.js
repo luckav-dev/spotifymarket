@@ -1,0 +1,319 @@
+'use strict';
+
+const {
+    ContainerBuilder,
+    TextDisplayBuilder,
+    SectionBuilder,
+    ThumbnailBuilder,
+    ModalBuilder,
+    LabelBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder
+} = require('discord.js');
+
+const MinimalSellAuthAnnouncements = require('./minimalSellAuthAnnouncements');
+const logger = require('../utils/logger');
+const media = require('../utils/media');
+const ui = require('../utils/ui');
+
+const REVIEW_DETAILS_DELAY_MS = 1000;
+const DETAILS_BUTTON_LABEL = 'View details';
+const REVIEW_BUTTON_LABEL = 'Leave a review';
+
+function esperar(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Las estrellas de reviews son deliberadamente Unicode hardcodeado.
+ * Siempre mostramos cinco posiciones para que el rating se lea de un vistazo.
+ */
+function estrellasReview(rating) {
+    const valor = Math.min(Math.max(Math.trunc(Number(rating) || 0), 0), 5);
+    return `${'⭐'.repeat(valor)}${'☆'.repeat(5 - valor)}`;
+}
+
+class SpotifySellAuthSystem extends MinimalSellAuthAnnouncements {
+    async iniciar() {
+        const resultado = await super.iniciar();
+
+        // Al arrancar migramos visualmente tanto vouches existentes como guia.
+        const timer = setTimeout(() => {
+            (async () => {
+                await this.refrescarResenasPublicadas();
+                await this.refrescarGuiaPublicada();
+            })().catch(error =>
+                logger.error('sellauth:reviews', `Review visual refresh failed: ${error.message}`)
+            );
+        }, 1500);
+        timer.unref?.();
+
+        return resultado;
+    }
+
+    async refrescarResenasPublicadas() {
+        const resenas = Object.values(this.db.data.resenas ?? {})
+            .filter(resena => resena?.messageId && resena?.channelId);
+        if (!resenas.length) return 0;
+
+        let actualizadas = 0;
+        for (const resena of resenas) {
+            try {
+                await this.publicarResena(resena, { actualizar: true });
+                actualizadas += 1;
+            } catch (error) {
+                logger.warn('sellauth:reviews', `No se pudo actualizar ${resena.key}: ${error.message}`);
+            }
+        }
+
+        if (actualizadas) logger.detalle(`Reviews visual refresh: ${actualizadas} reseña(s) actualizadas.`);
+        return actualizadas;
+    }
+
+    async refrescarGuiaPublicada() {
+        const canal = await this.canalResenas();
+        if (!canal) return false;
+
+        await this.borrarGuiaAnterior(canal);
+        await this.enviarGuia(canal);
+        logger.detalle('Review guide refresh: nuevo diseño compacto aplicado.');
+        return true;
+    }
+
+    construirResena(resena, avatarUrl = '') {
+        const estrellas = estrellasReview(resena.rating);
+        const cliente = resena.userId ? `<@${resena.userId}>` : 'Verified customer';
+        const verificado = this.emojis.rol('verificado') || this.emojis.get('success');
+        const feedbackIcon = this.emojis.rol('info') || this.emojis.get('reply');
+        const usuarioIcon = this.emojis.rol('usuario') || this.emojis.get('user');
+        const walletIcon = this.emojis.get('wallet') || this.emojis.rol('verificado');
+        const relojIcon = this.emojis.rol('reloj') || this.emojis.get('clock');
+        const verificationText = resena.source === 'sellauth'
+            ? 'SellAuth verified feedback'
+            : 'SellAuth invoice verification';
+
+        const container = new ContainerBuilder();
+        const cabecera =
+            `### ${verificado ? `${verificado} ` : ''}Verified Customer Review\n` +
+            `${estrellas}\n` +
+            `-# Verified purchase · Spotify Market`;
+
+        if (avatarUrl) {
+            container.addSectionComponents(
+                new SectionBuilder()
+                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera))
+                    .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl))
+            );
+        } else {
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cabecera));
+        }
+
+        // Un poco mas de contexto publico, sin revelar producto, variante,
+        // importe ni identificadores de la factura.
+        container
+            .addSeparatorComponents(ui.linea(false))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${usuarioIcon ? `${usuarioIcon} ` : ''}**Customer:** ${cliente}\n` +
+                `${verificado ? `${verificado} ` : ''}**Purchase:** Completed & verified\n` +
+                `${walletIcon ? `${walletIcon} ` : ''}**Verification:** ${verificationText}\n` +
+                `${relojIcon ? `${relojIcon} ` : ''}**Published:** ${ui.fecha(resena.createdAt, 'R')}`
+            ))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${feedbackIcon ? `${feedbackIcon} ` : ''}**Customer feedback**\n` +
+                `${ui.cita(ui.plano(resena.message))}`
+            ));
+
+        if (resena.reply) {
+            container
+                .addSeparatorComponents(ui.aire())
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                    `${this.emojis.rol('reply')} **Spotify Market reply**\n${ui.cita(ui.plano(resena.reply))}`
+                ));
+        }
+
+        const banner = media.resolver(this.config.reviews.banner, `review-${resena.key}`);
+        if (banner) {
+            container
+                .addSeparatorComponents(ui.aire())
+                .addMediaGalleryComponents(ui.galeria([banner.url], 'Spotify Market verified customer review'));
+        }
+
+        container
+            .addSeparatorComponents(ui.aire())
+            .addActionRowComponents(ui.fila(
+                ui.boton(this.emojis, {
+                    id: `sellauth:review-details:${resena.key}`,
+                    etiqueta: DETAILS_BUTTON_LABEL,
+                    estilo: 'secundario',
+                    emoji: 'buscar'
+                }),
+                ui.boton(this.emojis, {
+                    id: 'sellauth:review-modal',
+                    etiqueta: REVIEW_BUTTON_LABEL,
+                    estilo: 'secundario',
+                    emoji: 'anadir'
+                })
+            ));
+
+        return {
+            components: [container],
+            files: banner?.files ?? [],
+            flags: ui.V2,
+            allowedMentions: { parse: [], users: resena.userId ? [resena.userId] : [] }
+        };
+    }
+
+    construirGuiaPlana() {
+        const iconoTitulo = this.emojis.rol('valoracion') || this.emojis.get('notificacion');
+        const buscar = this.emojis.get('buscar');
+        const wallet = this.emojis.get('wallet');
+        const success = this.emojis.get('success');
+
+        return [
+            new TextDisplayBuilder().setContent(
+                `### ${iconoTitulo ? `${iconoTitulo} ` : ''}Customer Reviews\n` +
+                `Verified feedback from completed Spotify Market orders.\n` +
+                `-# Product and invoice details remain private.`
+            ),
+            ui.linea(false),
+            new TextDisplayBuilder().setContent(
+                `${buscar ? `${buscar} ` : ''}**Open** · Use **Leave a review** on any vouch above.\n` +
+                `${wallet ? `${wallet} ` : ''}**Verify** · Enter the invoice ID from your completed order.\n` +
+                `⭐ **Rate** · Choose 1–5 stars and write your experience.\n` +
+                `${success ? `${success} ` : ''}**Publish** · The invoice is validated once before the review goes live.`
+            )
+        ];
+    }
+
+    async enviarGuia(canal) {
+        const mensaje = await canal.send({
+            // Guia informativa compacta: el CTA vive dentro de cada vouch.
+            components: this.construirGuiaPlana(),
+            flags: ui.V2,
+            allowedMentions: { parse: [] }
+        });
+
+        this.db.data.guia = { canalId: canal.id, mensajeId: mensaje.id };
+        this.db.save();
+        return mensaje;
+    }
+
+    modalResena() {
+        const opciones = [
+            { valor: 5, label: '⭐⭐⭐⭐⭐  Excellent', descripcion: 'Everything went as expected' },
+            { valor: 4, label: '⭐⭐⭐⭐☆  Very good', descripcion: 'Good experience with a minor issue' },
+            { valor: 3, label: '⭐⭐⭐☆☆  Good', descripcion: 'An average overall experience' },
+            { valor: 2, label: '⭐⭐☆☆☆  Poor', descripcion: 'Several things could be improved' },
+            { valor: 1, label: '⭐☆☆☆☆  Bad', descripcion: 'The experience did not meet expectations' }
+        ];
+
+        const rating = new StringSelectMenuBuilder()
+            .setCustomId('rating')
+            .setPlaceholder('Select your rating')
+            .setMinValues(1)
+            .setMaxValues(1)
+            .addOptions(opciones.map(opcion =>
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(opcion.label)
+                    .setDescription(opcion.descripcion)
+                    .setValue(String(opcion.valor))
+            ));
+
+        return new ModalBuilder()
+            .setCustomId('sellauth:review-submit')
+            .setTitle('Leave a verified review')
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${this.emojis.rol('verificado')} **Verified purchases only**\n` +
+                '-# Your invoice is checked privately. Never include passwords, credentials or delivered account data.'
+            ))
+            .addLabelComponents(
+                new LabelBuilder()
+                    .setLabel('Invoice ID')
+                    .setDescription('Use the invoice ID from your completed Spotify Market order')
+                    .setTextInputComponent(
+                        new TextInputBuilder()
+                            .setCustomId('invoice')
+                            .setStyle(TextInputStyle.Short)
+                            .setPlaceholder('Example: 15064005')
+                            .setMinLength(1)
+                            .setMaxLength(80)
+                            .setRequired(true)
+                    ),
+                new LabelBuilder()
+                    .setLabel('Rating')
+                    .setDescription('Choose the score that best matches your experience')
+                    .setStringSelectMenuComponent(rating),
+                new LabelBuilder()
+                    .setLabel('Your review')
+                    .setDescription('Keep it useful, short and based on your actual purchase')
+                    .setTextInputComponent(
+                        new TextInputBuilder()
+                            .setCustomId('feedback')
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setPlaceholder('How was your experience?')
+                            .setMinLength(8)
+                            .setMaxLength(1200)
+                            .setRequired(true)
+                    )
+            );
+    }
+
+    async detallesResena(interaction, key) {
+        const resena = this.db.data.resenas[key];
+        if (!resena) {
+            return ui.responderEfimero(
+                interaction,
+                ui.error(this.emojis, 'This review is no longer available.')
+            );
+        }
+
+        const loadingIcon = this.emojis.get('loading');
+        const loading = new ContainerBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${loadingIcon ? `${loadingIcon} ` : ''}**Loading purchase details...**\n` +
+                '-# Verifying the private order information.'
+            ));
+
+        await ui.responderEfimero(interaction, loading);
+        await esperar(REVIEW_DETAILS_DELAY_MS);
+
+        const estrellas = estrellasReview(resena.rating);
+        const cliente = resena.userId ? `<@${resena.userId}>` : 'Verified customer';
+        const referencia = resena.invoiceId
+            ? `#${String(resena.invoiceId).slice(-8)}`
+            : resena.sourceId ? `#${resena.sourceId}` : 'Verified';
+
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `## ${this.emojis.rol('buscar')} Purchase details\n` +
+                `${estrellas}\n` +
+                '-# Private view · visible only to you'
+            ))
+            .addSeparatorComponents(ui.linea(false))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `${this.emojis.rol('producto')} **Product:** ${ui.plano(resena.productName)}\n` +
+                `${this.emojis.rol('usuario')} **Customer:** ${cliente}\n` +
+                `${this.emojis.rol('verificado')} **Invoice:** ${ui.dato(referencia)}\n` +
+                `${this.emojis.rol('reloj')} **Published:** ${ui.fecha(resena.createdAt, 'F')}`
+            ))
+            .addSeparatorComponents(ui.aire())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                `**Customer feedback**\n${ui.cita(ui.plano(resena.message))}`
+            ));
+
+        if (resena.reply) {
+            container
+                .addSeparatorComponents(ui.aire())
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+                    `${this.emojis.rol('reply')} **Spotify Market reply**\n${ui.cita(ui.plano(resena.reply))}`
+                ));
+        }
+
+        return ui.responderEfimero(interaction, container);
+    }
+}
+
+module.exports = SpotifySellAuthSystem;

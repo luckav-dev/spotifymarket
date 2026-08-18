@@ -11,7 +11,8 @@ const LogSystem = require('../modules/logSystem');
 const VerifySystem = require('../modules/verifySystem');
 const ModerationSystem = require('../modules/moderationSystem');
 const ShopSystem = require('../modules/shopSystem');
-const SellAuthSystem = require('../modules/minimalSellAuthAnnouncements');
+const SellAuthSystem = require('../modules/spotifyMarketCommerceSystem');
+const SellAuthPaymentWatcher = require('../modules/spotifyMarketPaymentWatcher');
 const WelcomeSystem = require('../modules/welcomeSystem');
 const RulesSystem = require('../modules/rulesSystem');
 const StatusSystem = require('../modules/statusSystem');
@@ -32,8 +33,6 @@ module.exports = {
 
         const emojis = client.emojiManager;
 
-        // Las claves son el dominio del customId: interactionCreate reparte por
-        // el prefijo, sin conocer ningun sistema en concreto.
         client.sistemas = {
             ticket: new TicketSystem(client, emojis),
             verify: new VerifySystem(client, emojis),
@@ -47,9 +46,31 @@ module.exports = {
             mod: new ModerationSystem(client, emojis)
         };
 
+        // Los webhooks siguen entrando en el sistema principal, pero todas las
+        // lecturas del bot pasan por la API privada de spotifymarket.xyz cuando
+        // SPOTIFY_MARKET_API_SECRET esta configurado.
+        client.sellauthPayments = new SellAuthPaymentWatcher(client, emojis);
+
         client.sistemas.log.registrar();
         client.sistemas.verify.iniciar();
         await client.sistemas.sellauth.iniciar();
+
+        const PAYMENT_START_DELAY_MS = 65 * 1000;
+        const PAYMENT_POLL_MS = 120 * 1000;
+        client.sellauthPaymentsStartTimer = setTimeout(() => {
+            client.sellauthPaymentsStartTimer = null;
+
+            client.sellauthPayments.scan();
+            client.sellauthPayments.timer = setInterval(
+                () => client.sellauthPayments.scan(),
+                PAYMENT_POLL_MS
+            );
+            client.sellauthPayments.timer.unref?.();
+            logger.paso('sellauth:payments', 'watcher de respaldo activo cada 120s via Spotify Market API');
+        }, PAYMENT_START_DELAY_MS);
+        client.sellauthPaymentsStartTimer.unref?.();
+        logger.detalle('Payment watcher de respaldo arrancara en 65s; los enlaces de pedido se generan en spotifymarket.xyz.');
+
         client.sistemas.shop.iniciar();
         client.sistemas.rules.iniciar();
         await client.sistemas.welcome.iniciar();
@@ -57,8 +78,6 @@ module.exports = {
 
         logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));
 
-        // Fuera de client.sistemas a proposito: ahi solo van los dominios de
-        // customId que enruta interactionCreate, y la API no atiende ninguno.
         client.api = new ApiServer(client, emojis);
         client.api.iniciar();
 
