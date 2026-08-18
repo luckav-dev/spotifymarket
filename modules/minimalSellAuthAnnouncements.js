@@ -23,6 +23,8 @@ const STOCK_SCHEMA = {
     lastError: ''
 };
 
+const CUSTOMER_ROLE_ID = '1416774392574119980';
+
 function cantidadFactura(factura) {
     const items = Array.isArray(factura?.items) ? factura.items : [];
     return items.reduce((total, item) => {
@@ -106,6 +108,56 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         }
 
         return super.publicarResena(resena, opciones);
+    }
+
+    async darRolCustomerDesdeFactura(factura) {
+        if (String(factura?.status ?? '').toLowerCase() !== 'completed') return false;
+
+        const discordId = SellAuthSystem.extraerDiscordId?.(factura) || '';
+        if (!discordId) {
+            logger.detalle(`Factura ${factura?.id ?? '?'} completada sin Discord vinculado; no se asigna Customer.`);
+            return false;
+        }
+
+        const guilds = [];
+        const guildId = process.env.GUILD_ID?.trim();
+        if (guildId) {
+            const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+            if (guild) guilds.push(guild);
+        } else {
+            guilds.push(...this.client.guilds.cache.values());
+        }
+
+        for (const guild of guilds) {
+            const miembro = await guild.members.fetch(discordId).catch(() => null);
+            if (!miembro) continue;
+
+            if (miembro.roles.cache.has(CUSTOMER_ROLE_ID)) {
+                logger.detalle(`Customer ya asignado a ${miembro.user.tag} (${discordId}).`);
+                return true;
+            }
+
+            const rol = await guild.roles.fetch(CUSTOMER_ROLE_ID).catch(() => null);
+            if (!rol) {
+                logger.warn('sellauth:customer', `No existe el rol Customer ${CUSTOMER_ROLE_ID} en ${guild.name}.`);
+                return false;
+            }
+
+            try {
+                await miembro.roles.add(rol, `SellAuth purchase completed · invoice ${factura?.id ?? 'unknown'}`);
+                logger.ok('sellauth:customer', `Rol Customer asignado a ${miembro.user.tag} (${discordId}) por factura ${factura?.id ?? '?'}.`);
+                return true;
+            } catch (error) {
+                logger.error(
+                    'sellauth:customer',
+                    `No se pudo asignar Customer a ${miembro.user.tag} (${discordId}): ${error.message}`
+                );
+                return false;
+            }
+        }
+
+        logger.warn('sellauth:customer', `Discord ${discordId} compro, pero no se encontro como miembro del servidor.`);
+        return false;
     }
 
     detener() {
@@ -218,6 +270,7 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
 
     async procesarEventoWebhook(payload) {
         const evento = String(payload?.event ?? '');
+        const datos = payload?.data ?? {};
         const eventosFactura = new Set([
             'NOTIFICATION.SHOP_INVOICE_CREATED',
             'NOTIFICATION.SHOP_INVOICE_PROCESSED',
@@ -226,6 +279,18 @@ class MinimalSellAuthAnnouncements extends SellAuthSystem {
         ]);
 
         if (eventosFactura.has(evento)) {
+            if (evento === 'NOTIFICATION.SHOP_INVOICE_PROCESSED' && datos.invoice_id) {
+                try {
+                    const factura = await this.api.obtenerFactura(datos.invoice_id);
+                    await this.darRolCustomerDesdeFactura(factura);
+                } catch (error) {
+                    logger.error(
+                        'sellauth:customer',
+                        `No se pudo comprobar la factura ${datos.invoice_id} para Customer: ${error.message}`
+                    );
+                }
+            }
+
             await this.sincronizarProductos({ anunciar: true });
             return;
         }
