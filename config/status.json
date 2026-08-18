@@ -34,7 +34,7 @@
   "services": {
     "website": {
       "label": "Website",
-      "emoji": "world"
+      "emoji": "website"
     },
     "products": {
       "label": "Product Catalog",
@@ -56,7 +56,7 @@
   "payments": {
     "paypal": {
       "label": "PayPal",
-      "emoji": "wallet",
+      "emoji": "paypal",
       "types": ["PAYPAL", "PAYPALFF"]
     },
     "bitcoin": {
