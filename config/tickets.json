@@ -15,9 +15,21 @@
     "etiquetaBoton": "Create ticket"
   },
   "prioridades": {
-    "1": { "nombre": "Low", "nombreAdmin": "Baja", "emoji": "signal_low" },
-    "2": { "nombre": "Medium", "nombreAdmin": "Media", "emoji": "signal_medium" },
-    "3": { "nombre": "High", "nombreAdmin": "Alta", "emoji": "signal_high" }
+    "1": {
+      "nombre": "Low",
+      "nombreAdmin": "Baja",
+      "emoji": "signal_low"
+    },
+    "2": {
+      "nombre": "Medium",
+      "nombreAdmin": "Media",
+      "emoji": "signal_medium"
+    },
+    "3": {
+      "nombre": "High",
+      "nombreAdmin": "Alta",
+      "emoji": "signal_high"
+    }
   },
   "categorias": {
     "soporte": {
@@ -26,7 +38,11 @@
       "emoji": "headphone",
       "categoriaId": "1416774394415677464",
       "prioridadPorDefecto": 2,
-      "rolesPermitidos": ["soporte", "moderador", "administrador"],
+      "rolesPermitidos": [
+        "soporte",
+        "moderador",
+        "administrador"
+      ],
       "formulario": [
         {
           "id": "asunto",
@@ -52,7 +68,11 @@
       "emoji": "wallet",
       "categoriaId": "1416774394415677462",
       "prioridadPorDefecto": 3,
-      "rolesPermitidos": ["soporte", "moderador", "administrador"],
+      "rolesPermitidos": [
+        "soporte",
+        "moderador",
+        "administrador"
+      ],
       "formulario": [
         {
           "id": "producto",
@@ -91,9 +111,78 @@
       "archivarCanal": true,
       "permitirReabrir": true
     },
-    "transcripciones": { "activo": true, "canalId": "1416774393853513802", "enviarAlUsuario": true },
-    "valoraciones": { "activo": true, "canalId": "1536535867265646665" },
-    "antiPingStaff": { "activo": true, "esperas": [60000, 300000, 900000] },
-    "autocierre": { "activo": true, "inactividadMs": 172800000, "avisoMs": 86400000, "intervaloMs": 900000 }
-  }
+    "transcripciones": {
+      "activo": true,
+      "canalId": "1416774393853513802",
+      "enviarAlUsuario": true
+    },
+    "valoraciones": {
+      "activo": true,
+      "canalId": "1536535867265646665"
+    },
+    "antiPingStaff": {
+      "activo": true,
+      "esperas": [
+        60000,
+        300000,
+        900000
+      ]
+    },
+    "autocierre": {
+      "activo": true,
+      "inactividadMs": 172800000,
+      "avisoMs": 86400000,
+      "intervaloMs": 900000
+    },
+    "retencion": {
+      "maxArchivados": 500,
+      "maxValoraciones": 1000
+    },
+    "sla": {
+      "activo": true,
+      "canalAvisosId": "",
+      "intervaloMs": 300000,
+      "sinReclamarMs": 1800000,
+      "sinRespuestaMs": 7200000,
+      "recordarCadaMs": 3600000
+    },
+    "asignacion": {
+      "activo": false,
+      "rolesId": [],
+      "avisarPorMd": true,
+      "excluirAusentes": true
+    }
+  },
+  "macros": [
+    {
+      "id": "esperando-datos",
+      "nombre": "Esperando datos",
+      "descripcion": "Pide la informacion que falta",
+      "contenido": "Thanks for reaching out. To move forward we still need a couple of details:\n\n- The email or username linked to your order\n- Your invoice ID, if you already completed the purchase\n\nReply here and we will pick it up right away."
+    },
+    {
+      "id": "en-proceso",
+      "nombre": "En proceso",
+      "descripcion": "Confirma que el caso esta en curso",
+      "contenido": "We are on it. Your case is being processed right now and you will get an update in this channel as soon as there is news. Thanks for your patience."
+    },
+    {
+      "id": "entrega-lista",
+      "nombre": "Entrega lista",
+      "descripcion": "Confirma la entrega del pedido",
+      "contenido": "Your order has been delivered. Please check the details and confirm everything works on your side.\n\nIf anything looks wrong, tell us in this ticket before closing it and we will sort it out."
+    },
+    {
+      "id": "garantia",
+      "nombre": "Garantia",
+      "descripcion": "Explica como se aplica la garantia",
+      "contenido": "Your purchase is covered by our warranty. Send us the invoice ID and a short description of the issue and we will replace or repair the product at no extra cost."
+    },
+    {
+      "id": "cierre-cortesia",
+      "nombre": "Cierre por cortesia",
+      "descripcion": "Avisa antes de cerrar",
+      "contenido": "We have not heard back from you in a while, so we will close this ticket shortly. If you still need help, just reply here and it will stay open."
+    }
+  ]
 }
