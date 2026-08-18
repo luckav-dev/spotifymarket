@@ -1,42 +1,73 @@
 {
   "activo": true,
-  "titulo": "Spotify Market | Service Status",
-  "descripcion": "A concise, live overview of store and support availability.",
-  "estadoPorDefecto": "abierto",
-  "mostrarHistorial": true,
-  "historialMaximo": 1,
+  "enabled": true,
+  "titulo": "Spotify Market · Service Status",
+  "title": "Spotify Market · Service Status",
+  "descripcion": "Live availability for our storefront, customer systems and payment methods.",
+  "description": "Live availability for our storefront, customer systems and payment methods.",
+  "estadoPorDefecto": "operational",
+  "historialMaximo": 0,
   "estados": {
-    "abierto": {
+    "operational": {
       "nombre": "Operational",
-      "nombreAdmin": "Operativo",
-      "descripcion": "Orders and support tickets are being handled normally.",
-      "emoji": "exito",
-      "porcentaje": 100,
-      "orden": 1
+      "descripcion": "Automatic health checks are passing.",
+      "emoji": "success"
     },
-    "ocupado": {
-      "nombre": "High demand",
-      "nombreAdmin": "Alta demanda",
-      "descripcion": "Services are available, but replies may take longer than usual.",
-      "emoji": "aviso",
-      "porcentaje": 75,
-      "orden": 2
-    },
-    "cerrado": {
-      "nombre": "Offline",
-      "nombreAdmin": "Fuera de línea",
-      "descripcion": "New requests will be reviewed when the team is available again.",
-      "emoji": "error",
-      "porcentaje": 0,
-      "orden": 3
-    },
-    "mantenimiento": {
+    "maintenance": {
       "nombre": "Maintenance",
-      "nombreAdmin": "Mantenimiento",
-      "descripcion": "Services are being updated; some orders or deliveries may be delayed.",
-      "emoji": "cargando",
-      "porcentaje": 40,
-      "orden": 4
+      "descripcion": "Temporarily under manual maintenance.",
+      "emoji": "update"
+    },
+    "offline": {
+      "nombre": "Offline",
+      "descripcion": "The automatic health check is failing.",
+      "emoji": "error"
+    }
+  },
+  "refreshIntervalMs": 60000,
+  "cacheTtlMs": 45000,
+  "productSyncStaleAfterMs": 360000,
+  "website": {
+    "url": "https://spotifymarket.xyz",
+    "timeoutMs": 6000
+  },
+  "services": {
+    "website": {
+      "label": "Website",
+      "emoji": "website"
+    },
+    "products": {
+      "label": "Product Catalog",
+      "emoji": "producto"
+    },
+    "bot": {
+      "label": "Discord Bot",
+      "emoji": "bots"
+    },
+    "tickets": {
+      "label": "Ticket System",
+      "emoji": "ticket"
+    },
+    "vouches": {
+      "label": "Vouch System",
+      "emoji": "valoracion"
+    }
+  },
+  "payments": {
+    "paypal": {
+      "label": "PayPal",
+      "emoji": "paypal",
+      "types": ["PAYPAL", "PAYPALFF"]
+    },
+    "bitcoin": {
+      "label": "Bitcoin (BTC)",
+      "emoji": "wallet",
+      "types": ["BTC"]
+    },
+    "litecoin": {
+      "label": "Litecoin (LTC)",
+      "emoji": "wallet",
+      "types": ["LTC"]
     }
   }
 }

@@ -9,14 +9,14 @@ const {
 
 const ui = require('../../utils/ui');
 
-const PANELES = [
+const PANELS = [
     { value: 'tickets', name: 'Ticket support panel', system: 'ticket' },
     { value: 'verification', name: 'Verification panel', system: 'verify' },
     { value: 'catalog', name: 'Product catalog', system: 'shop' },
     { value: 'reviews', name: 'Verified reviews and review guide', system: 'sellauth' },
     { value: 'welcome-preview', name: 'Welcome preview', system: 'welcome' },
     { value: 'rules', name: 'Rules navigator', system: 'rules' },
-    { value: 'service-status', name: 'Service status', system: 'status' },
+    { value: 'service-status', name: 'Live service status', system: 'status' },
     { value: 'suggestions', name: 'Suggestions panel', system: 'suggest' }
 ];
 
@@ -40,7 +40,7 @@ module.exports = {
     async autocomplete(interaction) {
         const query = interaction.options.getFocused().toLowerCase();
         return interaction.respond(
-            PANELES
+            PANELS
                 .filter(item => item.name.toLowerCase().includes(query) || item.value.includes(query))
                 .slice(0, 25)
                 .map(item => ({ name: item.name, value: item.value }))
@@ -51,7 +51,7 @@ module.exports = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const value = interaction.options.getString('panel');
         const channel = interaction.options.getChannel('channel');
-        const definition = PANELES.find(item => item.value === value);
+        const definition = PANELS.find(item => item.value === value);
         const system = definition ? client.sistemas?.[definition.system] : null;
 
         if (!definition || !system?.publicarPanel) {
@@ -67,13 +67,13 @@ module.exports = {
             return interaction.editReply({
                 components: [ui.exito(
                     emojis,
-                    `**${definition.name}** publicado en <#${channel.id}>.\n-# [Abrir mensaje](${message.url}) · ID \`${message.id}\``
+                    `**${definition.name}** published in <#${channel.id}>.\n-# [Open message](${message.url}) · ID \`${message.id}\``
                 )],
                 flags: ui.V2
             });
         } catch (error) {
             return interaction.editReply({
-                components: [ui.error(emojis, `No se pudo publicar el panel: ${error.message}`)],
+                components: [ui.error(emojis, `Could not publish the panel: ${error.message}`)],
                 flags: ui.V2
             });
         }

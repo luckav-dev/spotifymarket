@@ -30,17 +30,15 @@ module.exports = {
 
     async execute(client) {
         client.sistemasListos = false;
-        logger.paso('sesion', client.user.tag);
+        logger.paso('session', client.user.tag);
 
         const { creados, existentes, fallidos } = await client.emojiManager.sync();
-        logger.paso('emojis', `${creados + existentes} sincronizados`);
-        if (creados) logger.detalle(`${creados} subidos por primera vez`);
-        if (fallidos.length) logger.detalle(`no subidos: ${fallidos.join(', ')}`);
+        logger.paso('emojis', `${creados + existentes} synchronized`);
+        if (creados) logger.detalle(`${creados} uploaded for the first time`);
+        if (fallidos.length) logger.detalle(`not uploaded: ${fallidos.join(', ')}`);
 
         const emojis = client.emojiManager;
 
-        // Las claves son el dominio del customId: interactionCreate reparte por
-        // el prefijo, sin conocer ningun sistema en concreto.
         client.sistemas = {
             ticket: new TicketSystem(client, emojis),
             verify: new VerifySystem(client, emojis),
@@ -72,8 +70,8 @@ module.exports = {
                 await tarea();
             } catch (error) {
                 degradados.push(nombre);
-                logger.error('sistemas', `'${nombre}' no arranco: ${error.message}`);
-                logger.traza(`sistemas:${nombre}`, error);
+                logger.error('systems', `'${nombre}' failed to start: ${error.message}`);
+                logger.traza(`systems:${nombre}`, error);
             }
         };
 
@@ -82,6 +80,7 @@ module.exports = {
         await arrancar('sellauth', () => client.sistemas.sellauth.iniciar());
         await arrancar('shop', () => client.sistemas.shop.iniciar());
         await arrancar('rules', () => client.sistemas.rules.iniciar());
+        await arrancar('status', () => client.sistemas.status.iniciar());
         await arrancar('welcome', () => client.sistemas.welcome.iniciar());
         await arrancar('ticket', () => client.sistemas.ticket.iniciar());
         await arrancar('automod', () => client.sistemas.automod.iniciar());
@@ -91,25 +90,23 @@ module.exports = {
         await arrancar('mant', () => client.sistemas.mant.iniciar());
 
         client.sistemasDegradados = degradados;
-        logger.paso('sistemas', Object.keys(client.sistemas).join(' · '));
+        logger.paso('systems', Object.keys(client.sistemas).join(' · '));
         if (degradados.length) {
-            logger.warn('sistemas', `${degradados.length} degradado(s): ${degradados.join(', ')}`);
+            logger.warn('systems', `${degradados.length} degraded: ${degradados.join(', ')}`);
             alertas.aviso('arranque', `El bot arranco con subsistemas degradados: ${degradados.join(', ')}.`);
         }
 
-        // Fuera de client.sistemas a proposito: ahi solo van los dominios de
-        // customId que enruta interactionCreate, y la API no atiende ninguno.
         client.api = new ApiServer(client, emojis);
         client.api.iniciar();
 
         try {
             const total = await client.desplegarComandos();
-            logger.paso('despliegue', `${total} comandos · ${process.env.GUILD_ID ? 'gremio' : 'global'}`);
+            logger.paso('commands', `${total} commands · ${process.env.GUILD_ID ? 'guild' : 'global'}`);
             if (!process.env.GUILD_ID) {
-                logger.detalle('sin GUILD_ID la propagacion global tarda hasta 1 h');
+                logger.detalle('without GUILD_ID, global propagation can take up to 1 hour');
             }
         } catch (error) {
-            logger.error('despliegue', `no se pudieron desplegar: ${error.message}`);
+            logger.error('commands', `Could not deploy commands: ${error.message}`);
         }
 
         const presencia = aplicarPresencia(client);
@@ -117,13 +114,13 @@ module.exports = {
         const catalogo = client.sistemas.shop.visibles().length;
 
         logger.resumen([
-            ['servidores', String(client.guilds.cache.size)],
-            ['comandos', String(client.commands.size)],
+            ['servers', String(client.guilds.cache.size)],
+            ['commands', String(client.commands.size)],
             ['emojis', String(Object.keys(emojis.all()).length)],
-            ['tickets', `${activos} abiertos`],
-            ['catalogo', `${catalogo} publicados`],
-            ['presencia', presencia.actividad ? 'activa' : 'sin actividad'],
-            ['estado', degradados.length ? `${degradados.length} degradado(s)` : 'todo operativo']
+            ['tickets', `${activos} open`],
+            ['catalog', `${catalogo} published`],
+            ['presence', presencia.actividad ? 'active' : 'no activity'],
+            ['health', degradados.length ? `${degradados.length} degraded` : 'all operational']
         ]);
         client.sistemasListos = true;
         client.confirmarArranque?.();

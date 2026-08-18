@@ -1,7 +1,7 @@
 'use strict';
 
 const API_BASE = 'https://api.sellauth.com/v1';
-const MAX_REINTENTOS = 2;
+const MAX_RETRIES = 2;
 
 class SellAuthError extends Error {
     constructor(message, { status = 0, body = null, retryAfterMs = 0 } = {}) {
@@ -13,21 +13,21 @@ class SellAuthError extends Error {
     }
 }
 
-function esperar(ms) {
+function wait(ms) {
     return new Promise(resolve => {
-        const temporizador = setTimeout(resolve, ms);
-        temporizador.unref?.();
+        const timer = setTimeout(resolve, ms);
+        timer.unref?.();
     });
 }
 
-function objetoConsulta(query = {}) {
+function queryObject(query = {}) {
     const params = new URLSearchParams();
-    for (const [clave, valor] of Object.entries(query)) {
-        if (valor === undefined || valor === null || valor === '') continue;
-        if (Array.isArray(valor)) {
-            for (const item of valor) params.append(`${clave}[]`, String(item));
+    for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null || value === '') continue;
+        if (Array.isArray(value)) {
+            for (const item of value) params.append(`${key}[]`, String(item));
         } else {
-            params.set(clave, String(valor));
+            params.set(key, String(value));
         }
     }
     return params;
@@ -45,20 +45,23 @@ class SellAuthClient {
         return Boolean(this.apiKey && /^\d+$/.test(this.shopId));
     }
 
-    async request(pathname, { method = 'GET', query, body, intento = 0 } = {}) {
-        if (!this.apiKey) throw new SellAuthError('Falta SELLAUTH_API_KEY en el entorno.');
-        if (!/^\d+$/.test(this.shopId)) throw new SellAuthError('Falta un SELLAUTH_SHOP_ID valido.');
+    async request(pathname, { method = 'GET', query, body, attempt = 0, intento } = {}) {
+        // Keep backwards compatibility with older internal calls that may pass "intento".
+        if (Number.isInteger(intento) && !attempt) attempt = intento;
+
+        if (!this.apiKey) throw new SellAuthError('SELLAUTH_API_KEY is missing from the environment.');
+        if (!/^\d+$/.test(this.shopId)) throw new SellAuthError('A valid SELLAUTH_SHOP_ID is missing.');
 
         const url = new URL(`${this.baseUrl}/${String(pathname).replace(/^\/+/, '')}`);
-        for (const [clave, valor] of objetoConsulta(query)) url.searchParams.append(clave, valor);
+        for (const [key, value] of queryObject(query)) url.searchParams.append(key, value);
 
-        const controlador = new AbortController();
-        const temporizador = setTimeout(() => controlador.abort(), this.timeoutMs);
-        temporizador.unref?.();
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+        timer.unref?.();
 
-        let respuesta;
+        let response;
         try {
-            respuesta = await fetch(url, {
+            response = await fetch(url, {
                 method,
                 headers: {
                     Authorization: `Bearer ${this.apiKey}`,
@@ -66,68 +69,78 @@ class SellAuthClient {
                     ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
                 },
                 body: body === undefined ? undefined : JSON.stringify(body),
-                signal: controlador.signal
+                signal: controller.signal
             });
         } catch (error) {
-            clearTimeout(temporizador);
+            clearTimeout(timer);
             if (error.name === 'AbortError') {
-                throw new SellAuthError(`SellAuth no respondio en ${this.timeoutMs} ms.`);
+                throw new SellAuthError(`SellAuth did not respond within ${this.timeoutMs} ms.`);
             }
-            throw new SellAuthError(`No se pudo conectar con SellAuth: ${error.message}`);
+            throw new SellAuthError(`Could not connect to SellAuth: ${error.message}`);
         }
-        clearTimeout(temporizador);
+        clearTimeout(timer);
 
-        const texto = await respuesta.text();
-        let datos = null;
-        if (texto) {
+        const text = await response.text();
+        let data = null;
+        if (text) {
             try {
-                datos = JSON.parse(texto);
+                data = JSON.parse(text);
             } catch {
-                datos = texto;
+                data = text;
             }
         }
 
-        if (!respuesta.ok) {
-            const retryAfter = Number(respuesta.headers.get('retry-after'));
+        if (!response.ok) {
+            const retryAfter = Number(response.headers.get('retry-after'));
             const retryAfterMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 0;
-            const reintentable = respuesta.status === 429 || respuesta.status >= 500;
-            if (reintentable && intento < MAX_REINTENTOS) {
-                await esperar(Math.min(Math.max(retryAfterMs, 750 * (2 ** intento)), 5000));
-                return this.request(pathname, { method, query, body, intento: intento + 1 });
+            const retryable = response.status === 429 || response.status >= 500;
+
+            if (retryable && attempt < MAX_RETRIES) {
+                await wait(Math.min(Math.max(retryAfterMs, 750 * (2 ** attempt)), 5000));
+                return this.request(pathname, {
+                    method,
+                    query,
+                    body,
+                    attempt: attempt + 1
+                });
             }
 
-            const detalle = datos?.message ?? datos?.error ?? `HTTP ${respuesta.status}`;
-            throw new SellAuthError(`SellAuth rechazo la solicitud: ${detalle}`, {
-                status: respuesta.status,
-                body: datos,
+            const detail = data?.message ?? data?.error ?? `HTTP ${response.status}`;
+            throw new SellAuthError(`SellAuth rejected the request: ${detail}`, {
+                status: response.status,
+                body: data,
                 retryAfterMs
             });
         }
 
-        return datos;
+        return data;
     }
 
-    ruta(recurso = '') {
-        return `shops/${this.shopId}/${recurso}`.replace(/\/$/, '');
+    ruta(resource = '') {
+        return `shops/${this.shopId}/${resource}`.replace(/\/$/, '');
     }
 
-    async paginar(recurso, query = {}, { maxPaginas = 50 } = {}) {
-        const acumulado = [];
-        let pagina = Math.max(1, Number(query.page) || 1);
+    async paginar(resource, query = {}, { maxPaginas = 50 } = {}) {
+        const accumulated = [];
+        let page = Math.max(1, Number(query.page) || 1);
 
         for (let i = 0; i < maxPaginas; i += 1) {
-            const respuesta = await this.request(this.ruta(recurso), {
-                query: { ...query, page: pagina, perPage: Math.min(Number(query.perPage) || 100, 100) }
+            const response = await this.request(this.ruta(resource), {
+                query: {
+                    ...query,
+                    page,
+                    perPage: Math.min(Number(query.perPage) || 100, 100)
+                }
             });
-            const datos = Array.isArray(respuesta) ? respuesta : respuesta?.data ?? [];
-            acumulado.push(...datos);
+            const data = Array.isArray(response) ? response : response?.data ?? [];
+            accumulated.push(...data);
 
-            const ultima = Number(respuesta?.last_page ?? respuesta?.lastPage ?? pagina);
-            if (pagina >= ultima || !datos.length) break;
-            pagina += 1;
+            const last = Number(response?.last_page ?? response?.lastPage ?? page);
+            if (page >= last || !data.length) break;
+            page += 1;
         }
 
-        return acumulado;
+        return accumulated;
     }
 
     listarProductos(query = {}) {
@@ -166,9 +179,18 @@ class SellAuthClient {
         return this.request(this.ruta('feedbacks/stats'), { query });
     }
 
+    listarMetodosPago() {
+        return this.request(this.ruta('payment-methods'));
+    }
+
     obtenerTienda() {
         return this.request(this.ruta());
     }
 }
 
-module.exports = { SellAuthClient, SellAuthError, objetoConsulta };
+module.exports = {
+    SellAuthClient,
+    SellAuthError,
+    objetoConsulta: queryObject,
+    queryObject
+};
